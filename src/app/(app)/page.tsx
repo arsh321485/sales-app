@@ -10,6 +10,12 @@ import {
 } from "@/lib/scope";
 import { Badge, PageHeader, Panel, StatCard } from "@/components/ui";
 import { healthTone, phaseName } from "@/lib/constants";
+import type {
+  DemoToday,
+  LeadListItem,
+  MeetingToday,
+  NotificationLite,
+} from "@/types/models";
 
 export const dynamic = "force-dynamic";
 
@@ -121,7 +127,7 @@ export default async function MyDayPage() {
                 Nothing due today on your queue.
               </li>
             ) : (
-              dueToday.map((lead) => (
+              dueToday.map((lead: LeadListItem) => (
                 <li key={lead.id} className="flex items-start justify-between gap-3 py-3">
                   <div>
                     <Link
@@ -149,7 +155,7 @@ export default async function MyDayPage() {
             {notifications.length === 0 ? (
               <li className="text-sm text-[var(--muted)]">No notifications.</li>
             ) : (
-              notifications.map((n) => (
+              notifications.map((n: NotificationLite) => (
                 <li key={n.id} className="rounded-lg bg-[var(--surface)] px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-medium">{n.title}</p>
@@ -177,7 +183,7 @@ export default async function MyDayPage() {
             <p className="text-sm text-[var(--muted)]">No meetings today.</p>
           ) : (
             <ul className="space-y-2">
-              {meetingsToday.map((m) => (
+              {meetingsToday.map((m: MeetingToday) => (
                 <li key={m.id} className="rounded-lg border border-[var(--border)] px-3 py-2">
                   <p className="text-sm font-medium">{m.lead.organization.orgName}</p>
                   <p className="text-xs text-[var(--muted)]">
@@ -195,7 +201,7 @@ export default async function MyDayPage() {
             <p className="text-sm text-[var(--muted)]">No demos today.</p>
           ) : (
             <ul className="grid gap-2 sm:grid-cols-2">
-              {demosToday.map((d) => (
+              {demosToday.map((d: DemoToday) => (
                 <li key={d.id} className="rounded-lg border border-[var(--border)] px-3 py-2">
                   <p className="text-sm font-medium">{d.lead.organization.orgName}</p>
                   <p className="text-xs text-[var(--muted)]">

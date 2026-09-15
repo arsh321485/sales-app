@@ -7,6 +7,13 @@ import { phaseName } from "@/lib/constants";
 import { requireUser, isManagerRole } from "@/lib/auth";
 import { LeadActions } from "@/components/lead-actions";
 import { LeadEditPanel } from "@/components/lead-edit-panel";
+import type {
+  DemoRow,
+  DocumentRow,
+  MeetingRow,
+  PhaseHistoryRow,
+  UserLite,
+} from "@/types/models";
 
 export const dynamic = "force-dynamic";
 
@@ -44,9 +51,9 @@ export default async function LeadDetailPage({
   const involved =
     isManagerRole(user.role) ||
     lead.ownerId === user.id ||
-    lead.meetings.some((m) => m.ownerId === user.id) ||
+    lead.meetings.some((m: MeetingRow) => m.ownerId === user.id) ||
     lead.demos.some(
-      (d) => d.prepOwnerId === user.id || d.conductedById === user.id,
+      (d: DemoRow) => d.prepOwnerId === user.id || d.conductedById === user.id,
     );
 
   if (!involved) notFound();
@@ -131,7 +138,7 @@ export default async function LeadDetailPage({
             <LeadActions
               leadId={lead.id}
               currentPhase={lead.currentPhase}
-              people={people.map((p) => ({ id: p.id, name: p.name, role: p.role }))}
+              people={people.map((p: UserLite) => ({ id: p.id, name: p.name, role: p.role }))}
             />
           ) : null}
 
@@ -145,7 +152,11 @@ export default async function LeadDetailPage({
             nextActionDate={lead.nextActionDate?.toISOString() ?? null}
             icpFit={lead.icpFit}
             triggerEvent={lead.triggerEvent}
-            people={people.map((p) => ({ id: p.id, name: p.name, role: p.role }))}
+            people={people.map((p: UserLite) => ({
+              id: p.id,
+              name: p.name,
+              role: p.role,
+            }))}
             isManager={isManagerRole(user.role)}
             currentOwnerId={lead.ownerId}
           />
@@ -153,7 +164,7 @@ export default async function LeadDetailPage({
 
         <Panel title="Timeline">
           <ul className="space-y-3">
-            {lead.phaseHistory.map((h) => (
+            {lead.phaseHistory.map((h: PhaseHistoryRow) => (
               <li key={h.id} className="border-l-2 border-[var(--accent)] pl-3">
                 <p className="text-sm font-medium">
                   {h.fromPhase != null ? `P${h.fromPhase} → ` : ""}P{h.toPhase}:{" "}
@@ -173,7 +184,7 @@ export default async function LeadDetailPage({
             <p className="text-sm text-[var(--muted)]">No meetings yet.</p>
           ) : (
             <ul className="space-y-2 text-sm">
-              {lead.meetings.map((m) => (
+              {lead.meetings.map((m: MeetingRow) => (
                 <li key={m.id} className="rounded-lg bg-[var(--surface)] px-3 py-2">
                   <p className="font-medium">{m.meetingCode}</p>
                   <p className="text-xs text-[var(--muted)]">
@@ -193,7 +204,7 @@ export default async function LeadDetailPage({
             <p className="text-sm text-[var(--muted)]">No demos yet.</p>
           ) : (
             <ul className="space-y-2 text-sm">
-              {lead.demos.map((d) => (
+              {lead.demos.map((d: DemoRow) => (
                 <li key={d.id} className="rounded-lg bg-[var(--surface)] px-3 py-2">
                   <p className="font-medium">{d.demoCode}</p>
                   <p className="text-xs text-[var(--muted)]">
@@ -213,7 +224,7 @@ export default async function LeadDetailPage({
             <p className="text-sm text-[var(--muted)]">No documents uploaded.</p>
           ) : (
             <ul className="space-y-2 text-sm">
-              {lead.documents.map((d) => (
+              {lead.documents.map((d: DocumentRow) => (
                 <li key={d.id}>
                   <Link
                     href={`/documents?preview=${d.id}`}

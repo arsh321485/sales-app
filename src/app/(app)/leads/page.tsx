@@ -4,6 +4,7 @@ import { requireUser, isManagerRole } from "@/lib/auth";
 import { leadScopeWhere } from "@/lib/scope";
 import { Badge, PageHeader, Panel } from "@/components/ui";
 import { healthTone, phaseName } from "@/lib/constants";
+import type { LeadListItem } from "@/types/models";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +48,7 @@ export default async function LeadsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
-              {leads.map((lead) => (
+              {leads.map((lead: LeadListItem) => (
                 <tr key={lead.id} className="align-top">
                   <td className="py-3 pr-3">
                     <Link

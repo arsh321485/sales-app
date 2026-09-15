@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUser, hashPassword, isManagerRole } from "@/lib/auth";
+import type { UserLite } from "@/types/models";
 
 export async function GET() {
   const user = await getSessionUser();
@@ -12,7 +13,7 @@ export async function GET() {
     orderBy: { name: "asc" },
   });
   return NextResponse.json(
-    users.map((u) => ({
+    (users as UserLite[]).map((u: UserLite) => ({
       id: u.id,
       name: u.name,
       email: u.email,

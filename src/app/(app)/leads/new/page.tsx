@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { requireUser, isManagerRole } from "@/lib/auth";
 import { NewLeadForm } from "@/components/new-lead-form";
 import { PageHeader } from "@/components/ui";
+import type { ProductLite, UserLite } from "@/types/models";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export default async function NewLeadPage() {
           where: { isActive: true, role: { not: "Admin" } },
           orderBy: { name: "asc" },
         })
-      : Promise.resolve([]),
+      : Promise.resolve([] as UserLite[]),
   ]);
 
   return (
@@ -24,8 +25,12 @@ export default async function NewLeadPage() {
         description="Create a company + primary contact + product lead. It starts in Phase 1 (Research) on your queue."
       />
       <NewLeadForm
-        products={products.map((p) => ({ id: p.id, name: p.name, code: p.code }))}
-        assignableUsers={users.map((u) => ({
+        products={(products as ProductLite[]).map((p: ProductLite) => ({
+          id: p.id,
+          name: p.name,
+          code: p.code,
+        }))}
+        assignableUsers={(users as UserLite[]).map((u: UserLite) => ({
           id: u.id,
           name: u.name,
           role: u.role,

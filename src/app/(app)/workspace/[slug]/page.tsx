@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireUser, isManagerRole } from "@/lib/auth";
 import { leadScopeWhere } from "@/lib/scope";
 import { Badge, PageHeader, Panel } from "@/components/ui";
+import type { LeadListItem } from "@/types/models";
 
 export const dynamic = "force-dynamic";
 
@@ -82,7 +83,7 @@ export default async function WorkspacePage({
           </p>
         ) : (
           <ul className="divide-y divide-[var(--border)]">
-            {leads.map((lead) => (
+            {leads.map((lead: LeadListItem) => (
               <li
                 key={lead.id}
                 className="flex flex-wrap items-center justify-between gap-3 py-3"

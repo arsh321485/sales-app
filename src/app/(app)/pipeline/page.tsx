@@ -4,6 +4,7 @@ import { requireUser, isManagerRole } from "@/lib/auth";
 import { leadScopeWhere } from "@/lib/scope";
 import { Badge, PageHeader, Panel } from "@/components/ui";
 import { PHASES } from "@/lib/constants";
+import type { LeadListItem } from "@/types/models";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,7 @@ export default async function PipelinePage() {
 
       <div className="flex gap-3 overflow-x-auto pb-4">
         {PHASES.map((phase) => {
-          const column = leads.filter((l) => l.currentPhase === phase.id);
+          const column = leads.filter((l: LeadListItem) => l.currentPhase === phase.id);
           return (
             <Panel
               key={phase.id}
@@ -44,7 +45,7 @@ export default async function PipelinePage() {
                 {column.length === 0 ? (
                   <p className="text-xs text-[var(--muted)]">Empty</p>
                 ) : (
-                  column.map((lead) => (
+                  column.map((lead: LeadListItem) => (
                     <Link
                       key={lead.id}
                       href={`/leads/${lead.id}`}
