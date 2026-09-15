@@ -1,0 +1,369 @@
+// Pipeline OS — MongoDB via Prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Team {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now())
+  users     User[]
+}
+
+model User {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         String // Research | Outreach | BDM | Presales | Delivery | Head | Admin
+  teamId       String?  @db.ObjectId
+  team         Team?    @relation(fields: [teamId], references: [id])
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  ownedLeads     Lead[]         @relation("LeadOwner")
+  uploadedDocs   Document[]
+  meetingsOwned  Meeting[]      @relation("MeetingOwner")
+  demosPrep      Demo[]         @relation("DemoPrepOwner")
+  demosConducted Demo[]         @relation("DemoConductor")
+  phaseChanges   PhaseHistory[]
+  activities     ActivityLog[]
+  notifications  Notification[]
+}
+
+model Product {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  leads     Lead[]
+}
+
+model Master {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  category  String
+  code      String
+  label     String
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  @@unique([category, code])
+  @@index([category])
+}
+
+model Organization {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  orgCode       String   @unique
+  orgName       String
+  websiteDomain String?
+  orgType       String   @default("Company")
+  industry      String?
+  sizeBand      String?
+  city          String?
+  state         String?
+  country       String   @default("India")
+  orgStatus     String   @default("Prospect")
+  isCustomer    Boolean  @default(false)
+  doNotContact  Boolean  @default(false)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  isDeleted     Boolean  @default(false)
+
+  contacts Contact[]
+  leads    Lead[]
+
+  @@index([orgName])
+  @@index([websiteDomain])
+}
+
+model Contact {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String       @db.ObjectId
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  fullName       String
+  designation    String?
+  email          String?
+  phone          String?
+  linkedinUrl    String?
+  isPrimary      Boolean      @default(false)
+  emailVerified  Boolean      @default(false)
+  phoneVerified  Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  isDeleted      Boolean      @default(false)
+
+  primaryForLeads Lead[]
+
+  @@index([organizationId])
+  @@index([email])
+}
+
+model Lead {
+  id                   String   @id @default(auto()) @map("_id") @db.ObjectId
+  leadCode             String   @unique
+  organizationId       String   @db.ObjectId
+  organization         Organization @relation(fields: [organizationId], references: [id])
+  productId            String   @db.ObjectId
+  product              Product  @relation(fields: [productId], references: [id])
+  primaryContactId     String?  @db.ObjectId
+  primaryContact       Contact? @relation(fields: [primaryContactId], references: [id])
+  ownerId              String?  @db.ObjectId
+  owner                User?    @relation("LeadOwner", fields: [ownerId], references: [id])
+
+  currentPhase         Int      @default(1)
+  phaseStatus          String   @default("Researching")
+  furthestPhaseReached Int      @default(1)
+  outcome              String   @default("Active")
+  dropReason           String?
+  droppedAtPhase       Int?
+  onHoldReentryDate    DateTime?
+  healthFlag           String   @default("On Track")
+
+  icpFit         String?
+  triggerEvent   String?
+  quotedValue    Float?
+  wonValue       Float?
+  currency       String   @default("INR")
+  nextAction     String?
+  nextActionDate DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  isDeleted Boolean  @default(false)
+
+  research         Research?
+  outreachAttempts OutreachAttempt[]
+  followups        FollowUp[]
+  meetings         Meeting[]
+  requirement      Requirement?
+  engagementForms  EngagementForm[]
+  demos            Demo[]
+  onboarding       Onboarding?
+  phaseHistory     PhaseHistory[]
+  activities       ActivityLog[]
+  documents        Document[]
+  notifications    Notification[]
+
+  @@index([currentPhase, outcome])
+  @@index([ownerId])
+  @@index([organizationId])
+  @@index([productId])
+}
+
+model Research {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  leadId                String   @unique @db.ObjectId
+  lead                  Lead     @relation(fields: [leadId], references: [id])
+  status                String   @default("Researching")
+  source                String?
+  icpScore              String?
+  notes                 String?
+  outreachOwnerAssigned Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model OutreachAttempt {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  leadId       String   @db.ObjectId
+  lead         Lead     @relation(fields: [leadId], references: [id])
+  attemptNo    Int
+  channel      String
+  attemptedAt  DateTime @default(now())
+  responseType String?
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  @@index([leadId])
+}
+
+model FollowUp {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  leadId       String    @db.ObjectId
+  lead         Lead      @relation(fields: [leadId], references: [id])
+  followUpNo   Int
+  scheduledAt  DateTime?
+  doneAt       DateTime?
+  channel      String?
+  responseType String?
+  notes        String?
+  createdAt    DateTime  @default(now())
+
+  @@index([leadId])
+}
+
+model Meeting {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  meetingCode String    @unique
+  leadId      String    @db.ObjectId
+  lead        Lead      @relation(fields: [leadId], references: [id])
+  ownerId     String?   @db.ObjectId
+  owner       User?     @relation("MeetingOwner", fields: [ownerId], references: [id])
+  meetingType String?
+  mode        String?
+  meetingLink String?
+  scheduledAt DateTime?
+  completedAt DateTime?
+  status      String    @default("Meeting to be Scheduled")
+  outcome     String?
+  attendees   String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([leadId])
+  @@index([scheduledAt])
+  @@index([status])
+}
+
+model Requirement {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  leadId         String    @unique @db.ObjectId
+  lead           Lead      @relation(fields: [leadId], references: [id])
+  summary        String?
+  status         String    @default("Requirements Being Captured")
+  fitmentVerdict String?
+  reviewerNotes  String?
+  submittedAt    DateTime?
+  reviewedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model EngagementForm {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  leadId     String    @db.ObjectId
+  lead       Lead      @relation(fields: [leadId], references: [id])
+  versionNo  Int       @default(1)
+  formStatus String    @default("Pending")
+  sentAt     DateTime?
+  receivedAt DateTime?
+  verifiedAt DateTime?
+  documentId String?
+  createdAt  DateTime  @default(now())
+
+  @@index([leadId])
+}
+
+model Demo {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  demoCode          String    @unique
+  leadId            String    @db.ObjectId
+  lead              Lead      @relation(fields: [leadId], references: [id])
+  demoNo            Int       @default(1)
+  demoType          String?
+  requestedAt       DateTime?
+  clientConfirmedAt DateTime?
+  prepOwnerId       String?   @db.ObjectId
+  prepOwner         User?     @relation("DemoPrepOwner", fields: [prepOwnerId], references: [id])
+  prepChecklist     String?
+  prepStatus        String?
+  scheduledAt       DateTime?
+  deliveredAt       DateTime?
+  status            String    @default("Awaiting Client Confirmation")
+  conductedById     String?   @db.ObjectId
+  conductedBy       User?     @relation("DemoConductor", fields: [conductedById], references: [id])
+  modulesShown      String?
+  feedback          String?
+  decision          String?
+  decisionReason    String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([leadId])
+  @@index([scheduledAt])
+  @@index([status])
+}
+
+model Onboarding {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  leadId          String    @unique @db.ObjectId
+  lead            Lead      @relation(fields: [leadId], references: [id])
+  status          String    @default("Handover Pending")
+  kickoffAt       DateTime?
+  goLiveAt        DateTime?
+  blockers        String?
+  deliveryOwnerId String?   @db.ObjectId
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model PhaseHistory {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  leadId          String   @db.ObjectId
+  lead            Lead     @relation(fields: [leadId], references: [id])
+  fromPhase       Int?
+  toPhase         Int
+  fromStatus      String?
+  toStatus        String
+  changedById     String?  @db.ObjectId
+  changedBy       User?    @relation(fields: [changedById], references: [id])
+  reason          String?
+  daysInPrevPhase Int?
+  createdAt       DateTime @default(now())
+
+  @@index([leadId])
+  @@index([toPhase])
+}
+
+model ActivityLog {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  leadId       String   @db.ObjectId
+  lead         Lead     @relation(fields: [leadId], references: [id])
+  userId       String?  @db.ObjectId
+  user         User?    @relation(fields: [userId], references: [id])
+  activityType String
+  summary      String
+  detail       String?
+  createdAt    DateTime @default(now())
+
+  @@index([leadId])
+}
+
+model Document {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  leadId          String?  @db.ObjectId
+  lead            Lead?    @relation(fields: [leadId], references: [id])
+  documentType    String
+  title           String
+  fileName        String
+  storagePath     String
+  fileSize        Int
+  mimeType        String
+  versionNo       Int      @default(1)
+  isClientVisible Boolean  @default(false)
+  folder          String?
+  uploadedById    String?  @db.ObjectId
+  uploadedBy      User?    @relation(fields: [uploadedById], references: [id])
+  uploadedAt      DateTime @default(now())
+  notes           String?
+  isDeleted       Boolean  @default(false)
+
+  @@index([leadId])
+  @@index([documentType])
+  @@index([uploadedAt])
+}
+
+model Notification {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id])
+  leadId    String?  @db.ObjectId
+  lead      Lead?    @relation(fields: [leadId], references: [id])
+  eventType String
+  title     String
+  body      String?
+  priority  String   @default("Normal")
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+}
