@@ -13,7 +13,6 @@ export default async function DocumentsPage({
   const user = await requireUser();
   const manager = isManagerRole(user.role);
   const sp = await searchParams;
-
   const leadScope = leadScopeWhere(user);
 
   const [documents, leads] = await Promise.all([
@@ -56,10 +55,9 @@ export default async function DocumentsPage({
         title: d.title,
         fileName: d.fileName,
         documentType: d.documentType,
-        folder: d.folder,
         fileSize: d.fileSize,
         mimeType: d.mimeType,
-        versionNo: d.versionNo,
+        sharePointUrl: d.sharePointUrl,
         uploadedAt: d.uploadedAt.toISOString(),
         leadId: d.leadId,
         leadCode: d.lead?.leadCode ?? null,

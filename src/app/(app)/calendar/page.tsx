@@ -40,8 +40,8 @@ export default async function CalendarPage() {
         startsAt: m.scheduledAt!.toISOString(),
         status: m.status,
         leadId: m.leadId,
-        code: m.meetingCode,
-        mode: m.mode,
+        code: m.lead.leadCode,
+        mode: null,
       })),
     ...demos
       .filter((d) => d.scheduledAt)
@@ -49,11 +49,11 @@ export default async function CalendarPage() {
         id: d.id,
         kind: "demo" as const,
         title: d.lead.organization.orgName,
-        subtitle: `${d.demoType ?? "Demo"} · ${d.lead.product.code}`,
+        subtitle: `Demo · ${d.lead.product.code}`,
         startsAt: d.scheduledAt!.toISOString(),
         status: d.status,
         leadId: d.leadId,
-        code: d.demoCode,
+        code: d.lead.leadCode,
         mode: null,
       })),
   ];

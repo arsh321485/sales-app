@@ -2,35 +2,30 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUser, isManagerRole, isMongoObjectId } from "@/lib/auth";
 
-async function requireManager() {
-  const user = await getSessionUser();
-  if (!user || !isManagerRole(user.role)) return null;
-  return user;
-}
-
 export async function GET() {
-  if (!(await requireManager())) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   return NextResponse.json(
     await prisma.product.findMany({ orderBy: { name: "asc" } }),
   );
 }
 
 export async function POST(req: Request) {
-  if (!(await requireManager())) {
+  const user = await getSessionUser();
+  if (!user || !isManagerRole(user.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const body = await req.json();
   const name = String(body.name ?? "").trim();
-  const code = String(body.code ?? "")
-    .trim()
-    .toUpperCase();
+  const code = String(body.code ?? "").trim().toUpperCase();
+  const prefix = String(body.prefix ?? code).trim().toUpperCase();
   if (!name || !code) {
     return NextResponse.json({ error: "Name and code required" }, { status: 400 });
   }
   try {
-    const product = await prisma.product.create({ data: { name, code } });
+    const product = await prisma.product.create({
+      data: { name, code, prefix, nextNumber: 1 },
+    });
     return NextResponse.json(product);
   } catch {
     return NextResponse.json({ error: "Code already exists" }, { status: 409 });
@@ -38,7 +33,8 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  if (!(await requireManager())) {
+  const user = await getSessionUser();
+  if (!user || !isManagerRole(user.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const body = await req.json();
@@ -46,34 +42,34 @@ export async function PATCH(req: Request) {
   if (!isMongoObjectId(id)) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
-  const data: { name?: string; code?: string; isActive?: boolean } = {};
-  if (body.name != null) data.name = String(body.name).trim();
-  if (body.code != null) data.code = String(body.code).trim().toUpperCase();
-  if (body.isActive != null) data.isActive = Boolean(body.isActive);
-  try {
-    return NextResponse.json(
-      await prisma.product.update({ where: { id }, data }),
-    );
-  } catch {
-    return NextResponse.json({ error: "Update failed" }, { status: 500 });
-  }
+  return NextResponse.json(
+    await prisma.product.update({
+      where: { id },
+      data: {
+        name: body.name != null ? String(body.name).trim() : undefined,
+        prefix:
+          body.prefix != null
+            ? String(body.prefix).trim().toUpperCase()
+            : undefined,
+        isActive: body.isActive != null ? Boolean(body.isActive) : undefined,
+      },
+    }),
+  );
 }
 
 export async function DELETE(req: Request) {
-  if (!(await requireManager())) {
+  const user = await getSessionUser();
+  if (!user || !isManagerRole(user.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id") ?? "";
+  const id = new URL(req.url).searchParams.get("id") ?? "";
   if (!isMongoObjectId(id)) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
-  const leads = await prisma.lead.count({
-    where: { productId: id, isDeleted: false },
-  });
+  const leads = await prisma.lead.count({ where: { productId: id, isDeleted: false } });
   if (leads > 0) {
     return NextResponse.json(
-      { error: `Product has ${leads} lead(s). Deactivate instead of delete.` },
+      { error: "Product has leads — deactivate instead" },
       { status: 400 },
     );
   }

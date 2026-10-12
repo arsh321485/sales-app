@@ -2,7 +2,6 @@ import { prisma } from "@/lib/db";
 import { requireUser, isManagerRole } from "@/lib/auth";
 import { NewLeadForm } from "@/components/new-lead-form";
 import { PageHeader } from "@/components/ui";
-import type { ProductLite, UserLite } from "@/types/models";
 
 export const dynamic = "force-dynamic";
 
@@ -12,29 +11,24 @@ export default async function NewLeadPage() {
     prisma.product.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     isManagerRole(user.role)
       ? prisma.user.findMany({
-          where: { isActive: true, role: { not: "Admin" } },
+          where: {
+            isActive: true,
+            role: { in: ["SalesMember", "SalesManager", "SocialMediaManager"] },
+          },
           orderBy: { name: "asc" },
         })
-      : Promise.resolve([] as UserLite[]),
+      : Promise.resolve([]),
   ]);
 
   return (
     <div>
       <PageHeader
-        title="New lead"
-        description="Create a company + primary contact + product lead. It starts in Phase 1 (Research) on your queue."
+        title="New outreach"
+        description="Creates org + contact + product lead with a product-specific Lead ID (e.g. VF001). Stage starts at New — qualify or log any activity next."
       />
       <NewLeadForm
-        products={(products as ProductLite[]).map((p: ProductLite) => ({
-          id: p.id,
-          name: p.name,
-          code: p.code,
-        }))}
-        assignableUsers={(users as UserLite[]).map((u: UserLite) => ({
-          id: u.id,
-          name: u.name,
-          role: u.role,
-        }))}
+        products={products.map((p) => ({ id: p.id, name: p.name, code: p.code }))}
+        assignableUsers={users.map((u) => ({ id: u.id, name: u.name, role: u.role }))}
         isManager={isManagerRole(user.role)}
       />
     </div>

@@ -35,10 +35,12 @@ export async function DELETE(
     data: { isDeleted: true },
   });
 
-  try {
-    await unlink(path.join(process.cwd(), "uploads", doc.storagePath));
-  } catch {
-    // file may already be gone
+  if (doc.storagePath) {
+    try {
+      await unlink(path.join(process.cwd(), "uploads", doc.storagePath));
+    } catch {
+      // file may already be gone
+    }
   }
 
   return NextResponse.json({ ok: true });

@@ -1,7 +1,7 @@
-import { requireManager, isManagerRole } from "@/lib/auth";
-import { DashboardClient } from "@/components/dashboard-client";
-import { PHASES } from "@/lib/constants";
+import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { requireManager } from "@/lib/auth";
+import { Badge, PageHeader, Panel, StatCard } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -10,12 +10,14 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ member?: string }>;
 }) {
-  const user = await requireManager();
-  void user;
-
+  await requireManager();
   const sp = await searchParams;
+
   const members = await prisma.user.findMany({
-    where: { isActive: true, role: { not: "Admin" } },
+    where: {
+      isActive: true,
+      role: { in: ["SalesMember", "SalesManager", "SocialMediaManager", "SuperAdmin"] },
+    },
     include: { team: true },
     orderBy: { name: "asc" },
   });
@@ -24,139 +26,193 @@ export default async function DashboardPage({
     sp.member && members.some((m) => m.id === sp.member)
       ? sp.member
       : members[0]?.id;
+  const selected = members.find((m) => m.id === selectedId);
 
-  const selected = members.find((m) => m.id === selectedId) ?? members[0];
-
-  if (!selected) {
-    return <p className="text-sm text-[var(--muted)]">No team members found.</p>;
-  }
+  const stageGroups = await prisma.lead.groupBy({
+    by: ["salesStage"],
+    where: { isDeleted: false },
+    _count: { _all: true },
+  });
 
   const [
-    activeOwned,
-    wonOwned,
-    droppedOwned,
-    meetingsDone,
+    openLeads,
+    won,
+    lost,
+    onHold,
+    openRequests,
+    pendingFollowUps,
     meetingsUpcoming,
-    demosDone,
     demosUpcoming,
-    outreachAttempts,
-    activities,
-    phaseBuckets,
-    teamComparison,
+    wonValue,
+    memberStats,
   ] = await Promise.all([
     prisma.lead.count({
-      where: { ownerId: selected.id, outcome: "Active", isDeleted: false },
+      where: {
+        isDeleted: false,
+        salesStage: { notIn: ["Won", "Lost"] },
+        ...(selectedId ? { ownerId: selectedId } : {}),
+      },
     }),
     prisma.lead.count({
-      where: { ownerId: selected.id, outcome: "Won", isDeleted: false },
+      where: {
+        isDeleted: false,
+        salesStage: "Won",
+        ...(selectedId ? { ownerId: selectedId } : {}),
+      },
     }),
     prisma.lead.count({
-      where: { ownerId: selected.id, outcome: "Dropped", isDeleted: false },
+      where: {
+        isDeleted: false,
+        salesStage: "Lost",
+        ...(selectedId ? { ownerId: selectedId } : {}),
+      },
     }),
-    prisma.meeting.count({
-      where: { ownerId: selected.id, status: "Completed" },
+    prisma.lead.count({
+      where: {
+        isDeleted: false,
+        salesStage: "OnHold",
+        ...(selectedId ? { ownerId: selectedId } : {}),
+      },
+    }),
+    prisma.clientRequest.count({
+      where: {
+        status: { in: ["Open", "In Progress"] },
+        ...(selectedId ? { ownerId: selectedId } : {}),
+      },
+    }),
+    prisma.followUp.count({
+      where: {
+        status: "Pending",
+        ...(selectedId ? { ownerId: selectedId } : {}),
+      },
     }),
     prisma.meeting.count({
       where: {
-        ownerId: selected.id,
-        status: { in: ["Scheduled", "Rescheduled", "Meeting to be Scheduled"] },
+        status: { in: ["Scheduled", "To be Scheduled"] },
+        scheduledAt: { gte: new Date() },
+        ...(selectedId ? { ownerId: selectedId } : {}),
       },
     }),
     prisma.demo.count({
       where: {
-        OR: [{ conductedById: selected.id }, { prepOwnerId: selected.id }],
-        status: { in: ["Demo Delivered", "Won"] },
+        status: "Scheduled",
+        scheduledAt: { gte: new Date() },
+        ...(selectedId ? { ownerId: selectedId } : {}),
       },
     }),
-    prisma.demo.count({
+    prisma.lead.aggregate({
       where: {
-        OR: [{ conductedById: selected.id }, { prepOwnerId: selected.id }],
-        status: { in: ["Demo Scheduled", "Ready for Demo", "Prep Complete"] },
+        isDeleted: false,
+        salesStage: "Won",
+        ...(selectedId ? { ownerId: selectedId } : {}),
       },
+      _sum: { wonValue: true },
     }),
-    prisma.outreachAttempt.count({
-      where: { lead: { ownerId: selected.id } },
-    }),
-    prisma.activityLog.count({ where: { userId: selected.id } }),
     Promise.all(
-      PHASES.map(async (p) => ({
-        phase: p.id,
-        label: p.short,
-        name: p.name,
-        count: await prisma.lead.count({
-          where: {
-            ownerId: selected.id,
-            currentPhase: p.id,
-            outcome: "Active",
-            isDeleted: false,
-          },
-        }),
-      })),
-    ),
-    Promise.all(
-      members
-        .filter((m) => !isManagerRole(m.role) || m.id === selected.id)
-        .map(async (m) => {
-          const [active, won, meetings, demos, activities, outreach] = await Promise.all([
-            prisma.lead.count({
-              where: { ownerId: m.id, outcome: "Active", isDeleted: false },
-            }),
-            prisma.lead.count({
-              where: { ownerId: m.id, outcome: "Won", isDeleted: false },
-            }),
-            prisma.meeting.count({ where: { ownerId: m.id } }),
-            prisma.demo.count({
-              where: {
-                OR: [{ conductedById: m.id }, { prepOwnerId: m.id }],
-              },
-            }),
-            prisma.activityLog.count({ where: { userId: m.id } }),
-            prisma.outreachAttempt.count({
-              where: { lead: { ownerId: m.id } },
-            }),
-          ]);
-          return {
-            id: m.id,
-            name: m.name,
-            role: m.role,
-            active,
-            won,
-            meetings,
-            demos,
-            touches: activities + outreach,
-          };
-        }),
+      members.map(async (m) => {
+        const [active, closedWon, requests] = await Promise.all([
+          prisma.lead.count({
+            where: {
+              ownerId: m.id,
+              isDeleted: false,
+              salesStage: { notIn: ["Won", "Lost"] },
+            },
+          }),
+          prisma.lead.count({
+            where: { ownerId: m.id, isDeleted: false, salesStage: "Won" },
+          }),
+          prisma.clientRequest.count({
+            where: {
+              ownerId: m.id,
+              status: { in: ["Open", "In Progress"] },
+            },
+          }),
+        ]);
+        return { ...m, active, closedWon, requests };
+      }),
     ),
   ]);
 
-  const totalClosed = wonOwned + droppedOwned;
-  const winRate = totalClosed === 0 ? 0 : Math.round((wonOwned / totalClosed) * 100);
-
   return (
-    <DashboardClient
-      members={members.map((m) => ({
-        id: m.id,
-        name: m.name,
-        role: m.role,
-        teamName: m.team?.name ?? null,
-      }))}
-      selectedId={selected.id}
-      selectedName={selected.name}
-      selectedRole={selected.role}
-      kpis={{
-        activeOwned,
-        wonOwned,
-        droppedOwned,
-        meetingsDone,
-        meetingsUpcoming,
-        demosDone,
-        demosUpcoming,
-        outreachAttempts,
-        activities,
-        winRate,
-      }}
-      phaseBuckets={phaseBuckets}
-      teamComparison={teamComparison}
-    />
+    <div>
+      <PageHeader
+        title="Master dashboard"
+        description="KPIs across the flexible pipeline — filter by team member."
+      />
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        {members.map((m) => (
+          <Link
+            key={m.id}
+            href={`/dashboard?member=${m.id}`}
+            className={`rounded-md px-3 py-1.5 text-sm ${
+              m.id === selectedId
+                ? "bg-[var(--accent)] text-white"
+                : "bg-white border border-[var(--border)]"
+            }`}
+          >
+            {m.name}
+          </Link>
+        ))}
+      </div>
+
+      {selected ? (
+        <p className="mb-4 text-sm text-[var(--muted)]">
+          Viewing: <strong>{selected.name}</strong> ({selected.role}
+          {selected.team ? ` · ${selected.team.name}` : ""})
+        </p>
+      ) : null}
+
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Open leads" value={openLeads} />
+        <StatCard label="Won" value={won} hint={wonValue._sum.wonValue ? `₹${wonValue._sum.wonValue}` : undefined} />
+        <StatCard label="Lost / On hold" value={`${lost} / ${onHold}`} />
+        <StatCard label="Open client requests" value={openRequests} />
+        <StatCard label="Pending follow-ups" value={pendingFollowUps} />
+        <StatCard label="Upcoming meetings" value={meetingsUpcoming} />
+        <StatCard label="Upcoming demos" value={demosUpcoming} />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Panel title="Pipeline by stage (all leads)">
+          <ul className="space-y-2 text-sm">
+            {stageGroups.map((g) => (
+              <li key={g.salesStage} className="flex justify-between">
+                <span>{g.salesStage}</span>
+                <Badge>{g._count._all}</Badge>
+              </li>
+            ))}
+            {stageGroups.length === 0 ? (
+              <li className="text-[var(--muted)]">No leads yet.</li>
+            ) : null}
+          </ul>
+        </Panel>
+
+        <Panel title="Team comparison">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="text-[11px] uppercase text-[var(--muted)]">
+                <tr>
+                  <th className="pb-2">Member</th>
+                  <th className="pb-2">Open</th>
+                  <th className="pb-2">Won</th>
+                  <th className="pb-2">Requests</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {memberStats.map((m) => (
+                  <tr key={m.id}>
+                    <td className="py-2">{m.name}</td>
+                    <td className="py-2">{m.active}</td>
+                    <td className="py-2">{m.closedWon}</td>
+                    <td className="py-2">{m.requests}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      </div>
+    </div>
   );
 }

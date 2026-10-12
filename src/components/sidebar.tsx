@@ -4,18 +4,23 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
-  Kanban,
   Users,
   CalendarDays,
   FolderOpen,
-  PhoneCall,
-  Handshake,
-  Presentation,
   Settings,
-  Search,
   BarChart3,
   LogOut,
   PlusCircle,
+  ClipboardList,
+  Handshake,
+  Presentation,
+  FileText,
+  Inbox,
+  Target,
+  Bell,
+  Link2,
+  Upload,
+  Banknote,
 } from "lucide-react";
 import { cn } from "@/lib/constants";
 
@@ -27,17 +32,21 @@ type NavUser = {
   isManager: boolean;
 };
 
-const baseNav = [
-  { href: "/", label: "My Day", icon: LayoutDashboard },
-  { href: "/leads/new", label: "New lead", icon: PlusCircle },
-  { href: "/pipeline", label: "Pipeline", icon: Kanban },
+const salesNav = [
+  { href: "/", label: "My Work", icon: ClipboardList },
+  { href: "/leads/new", label: "New outreach", icon: PlusCircle },
   { href: "/leads", label: "Leads", icon: Users },
+  { href: "/follow-ups", label: "Follow-ups", icon: Inbox },
+  { href: "/meetings", label: "Meetings", icon: Handshake },
+  { href: "/demos", label: "Demos", icon: Presentation },
+  { href: "/requirements", label: "Requirements", icon: FileText },
+  { href: "/requests", label: "Client requests", icon: Inbox },
+  { href: "/opportunities", label: "Opportunities", icon: Target },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/resources", label: "Sales resources", icon: Link2 },
   { href: "/documents", label: "Documents", icon: FolderOpen },
-  { href: "/workspace/research", label: "Research", icon: Search },
-  { href: "/workspace/outreach", label: "Outreach", icon: PhoneCall },
-  { href: "/workspace/meetings", label: "Meetings", icon: Handshake },
-  { href: "/workspace/demos", label: "Demos", icon: Presentation },
+  { href: "/import", label: "Lead import", icon: Upload },
+  { href: "/notifications", label: "Notifications", icon: Bell },
 ];
 
 export function Sidebar({ user }: { user: NavUser }) {
@@ -45,11 +54,12 @@ export function Sidebar({ user }: { user: NavUser }) {
   const router = useRouter();
 
   const nav = [
-    ...baseNav,
+    ...salesNav,
     ...(user.isManager
       ? [
           { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
-          { href: "/admin", label: "Admin", icon: Settings },
+          { href: "/revenue", label: "Revenue targets", icon: Banknote },
+          { href: "/admin", label: "Settings", icon: Settings },
         ]
       : []),
   ];
@@ -64,14 +74,12 @@ export function Sidebar({ user }: { user: NavUser }) {
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-white/10 bg-[var(--sidebar)] text-[var(--sidebar-fg)]">
       <div className="border-b border-white/10 px-5 py-5">
         <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--accent)]">
-          Sales & Growth
+          Sales Pipeline
         </p>
         <h1 className="mt-1 font-[family-name:var(--font-display)] text-xl leading-tight tracking-tight">
           Pipeline OS
         </h1>
-        <p className="mt-1 text-xs text-white/55">
-          {user.isManager ? "Manager view" : "Your secured workspace"}
-        </p>
+        <p className="mt-1 text-xs text-white/55">Activity-based CRM</p>
       </div>
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">

@@ -1,7 +1,25 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUser, isManagerRole } from "@/lib/auth";
-import { nextLeadCode, nextOrgCode } from "@/lib/codes";
+import { nextLeadCode, logActivity, notify } from "@/lib/leads";
+import { leadScopeWhere } from "@/lib/scope";
+
+export async function GET() {
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const leads = await prisma.lead.findMany({
+    where: { isDeleted: false, ...leadScopeWhere(user) },
+    include: {
+      organization: true,
+      product: true,
+      contact: true,
+      owner: true,
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+  return NextResponse.json(leads);
+}
 
 export async function POST(req: Request) {
   const user = await getSessionUser();
@@ -12,45 +30,35 @@ export async function POST(req: Request) {
     const orgName = String(body.orgName ?? "").trim();
     const productId = String(body.productId ?? "");
     const contactName = String(body.contactName ?? "").trim();
-    const contactEmail = String(body.contactEmail ?? "").trim() || null;
-    const contactPhone = String(body.contactPhone ?? "").trim() || null;
-    const contactDesignation = String(body.contactDesignation ?? "").trim() || null;
-    const industry = String(body.industry ?? "").trim() || null;
-    const city = String(body.city ?? "").trim() || null;
-    const state = String(body.state ?? "").trim() || null;
-    const source = String(body.source ?? "").trim() || null;
-    const icpFit = String(body.icpFit ?? "").trim() || null;
-    const triggerEvent = String(body.triggerEvent ?? "").trim() || null;
-    const nextAction = String(body.nextAction ?? "Research and qualify").trim();
-    const notes = String(body.notes ?? "").trim() || null;
+    if (!orgName || !productId || !contactName) {
+      return NextResponse.json(
+        { error: "Company, product and contact name are required" },
+        { status: 400 },
+      );
+    }
 
-    // Manager can assign to another user; employees own what they create
+    const product = await prisma.product.findFirst({
+      where: { id: productId, isActive: true },
+    });
+    if (!product) {
+      return NextResponse.json({ error: "Invalid product" }, { status: 400 });
+    }
+
     let ownerId = user.id;
     if (isManagerRole(user.role) && body.ownerId) {
       ownerId = String(body.ownerId);
     }
 
-    if (!orgName || !productId || !contactName) {
-      return NextResponse.json(
-        { error: "Company name, product, and contact name are required" },
-        { status: 400 },
-      );
-    }
-
-    const product = await prisma.product.findUnique({ where: { id: productId } });
-    if (!product || !product.isActive) {
-      return NextResponse.json({ error: "Invalid product" }, { status: 400 });
-    }
+    const leadCode = await nextLeadCode(productId);
 
     const org = await prisma.organization.create({
       data: {
-        orgCode: await nextOrgCode(),
         orgName,
-        industry,
-        city,
-        state,
-        notes,
-        orgStatus: "Prospect",
+        industry: String(body.industry ?? "").trim() || null,
+        city: String(body.city ?? "").trim() || null,
+        state: String(body.state ?? "").trim() || null,
+        websiteDomain: String(body.websiteDomain ?? "").trim() || null,
+        notes: String(body.notes ?? "").trim() || null,
       },
     });
 
@@ -58,55 +66,49 @@ export async function POST(req: Request) {
       data: {
         organizationId: org.id,
         fullName: contactName,
-        email: contactEmail,
-        phone: contactPhone,
-        designation: contactDesignation,
-        isPrimary: true,
-        emailVerified: Boolean(contactEmail),
+        designation: String(body.designation ?? "").trim() || null,
+        email: String(body.contactEmail ?? "").trim() || null,
+        phone: String(body.contactPhone ?? "").trim() || null,
+        linkedinUrl: String(body.linkedinUrl ?? "").trim() || null,
       },
     });
 
     const lead = await prisma.lead.create({
       data: {
-        leadCode: await nextLeadCode(product.code),
+        leadCode,
         organizationId: org.id,
-        productId: product.id,
-        primaryContactId: contact.id,
+        productId,
+        contactId: contact.id,
         ownerId,
-        currentPhase: 1,
-        phaseStatus: "Researching",
-        furthestPhaseReached: 1,
-        outcome: "Active",
-        icpFit,
-        triggerEvent,
-        nextAction,
-        nextActionDate: new Date(),
-        research: {
-          create: {
-            status: "Researching",
-            source,
-            icpScore: icpFit,
-            notes,
-          },
-        },
-        phaseHistory: {
-          create: {
-            fromPhase: null,
-            toPhase: 1,
-            toStatus: "Researching",
-            changedById: user.id,
-            reason: "Lead created",
-          },
-        },
-        activities: {
-          create: {
-            userId: user.id,
-            activityType: "lead_created",
-            summary: `Created lead ${orgName}`,
-          },
-        },
+        salesStage: "New",
+        source: String(body.source ?? "Manual").trim() || "Manual",
+        campaign: String(body.campaign ?? "").trim() || null,
+        nextAction: String(body.nextAction ?? "Qualify lead").trim(),
+        nextFollowUpAt: body.nextFollowUpAt
+          ? new Date(String(body.nextFollowUpAt))
+          : null,
+        notes: String(body.notes ?? "").trim() || null,
       },
     });
+
+    await logActivity({
+      leadId: lead.id,
+      userId: user.id,
+      activityType: "Outreach",
+      title: `Outreach created — ${leadCode}`,
+      detail: `Channel: ${body.outreachChannel ?? "Manual"}`,
+    });
+
+    if (ownerId !== user.id) {
+      await notify({
+        userId: ownerId,
+        leadId: lead.id,
+        eventType: "lead_assigned",
+        title: `New lead assigned: ${leadCode}`,
+        body: orgName,
+        priority: "Medium",
+      });
+    }
 
     return NextResponse.json({ id: lead.id, leadCode: lead.leadCode });
   } catch (e) {

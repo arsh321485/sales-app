@@ -9,12 +9,9 @@
     "lint": "eslint",
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
-    "db:seed": "tsx prisma/seed.ts",
-    "db:reset": "tsx prisma/seed.ts",
-    "db:replica": "tsx scripts/init-replica.ts"
-  },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "db:wipe": "tsx prisma/wipe.ts",
+    "setup:admin": "tsx prisma/setup-admin.ts",
+    "db:reset": "prisma db push && tsx prisma/wipe.ts && tsx prisma/setup-admin.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
@@ -29,6 +26,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "uuid": "^14.0.2",
+    "xlsx": "^0.18.5",
     "zod": "^4.6.5"
   },
   "devDependencies": {

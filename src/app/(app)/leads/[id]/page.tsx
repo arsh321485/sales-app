@@ -1,19 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { format } from "date-fns";
 import { prisma } from "@/lib/db";
-import { Badge, PageHeader, Panel } from "@/components/ui";
-import { phaseName } from "@/lib/constants";
 import { requireUser, isManagerRole } from "@/lib/auth";
-import { LeadActions } from "@/components/lead-actions";
-import { LeadEditPanel } from "@/components/lead-edit-panel";
-import type {
-  DemoRow,
-  DocumentRow,
-  MeetingRow,
-  PhaseHistoryRow,
-  UserLite,
-} from "@/types/models";
+import { canViewAllLeads } from "@/lib/constants";
+import { Badge, PageHeader, Panel } from "@/components/ui";
+import { LeadWorkspace } from "@/components/lead-workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -24,223 +15,173 @@ export default async function LeadDetailPage({
 }) {
   const user = await requireUser();
   const { id } = await params;
-  const [lead, people] = await Promise.all([
-    prisma.lead.findUnique({
-      where: { id },
-      include: {
-        organization: true,
-        product: true,
-        owner: true,
-        primaryContact: true,
-        meetings: { orderBy: { scheduledAt: "desc" } },
-        demos: { orderBy: { scheduledAt: "desc" } },
-        documents: { where: { isDeleted: false }, orderBy: { uploadedAt: "desc" } },
-        phaseHistory: { orderBy: { createdAt: "desc" }, include: { changedBy: true } },
-        activities: { orderBy: { createdAt: "desc" }, take: 20 },
-        outreachAttempts: { orderBy: { attemptedAt: "desc" }, take: 10 },
+
+  const lead = await prisma.lead.findFirst({
+    where: { id, isDeleted: false },
+    include: {
+      organization: true,
+      product: true,
+      contact: true,
+      owner: true,
+      activities: { orderBy: { occurredAt: "desc" }, take: 40 },
+      followUps: { orderBy: { createdAt: "desc" } },
+      meetings: { orderBy: { scheduledAt: "desc" } },
+      demos: { orderBy: { scheduledAt: "desc" } },
+      requirements: { orderBy: { receivedAt: "desc" } },
+      clientRequests: {
+        orderBy: { createdAt: "desc" },
+        include: { resource: true },
       },
-    }),
-    prisma.user.findMany({
-      where: { isActive: true, role: { not: "Admin" } },
-      orderBy: { name: "asc" },
-    }),
-  ]);
+      opportunities: { orderBy: { createdAt: "desc" } },
+      documents: { where: { isDeleted: false }, orderBy: { uploadedAt: "desc" } },
+    },
+  });
 
   if (!lead) notFound();
+  if (!canViewAllLeads(user.role) && lead.ownerId !== user.id) notFound();
 
-  const involved =
-    isManagerRole(user.role) ||
-    lead.ownerId === user.id ||
-    lead.meetings.some((m: MeetingRow) => m.ownerId === user.id) ||
-    lead.demos.some(
-      (d: DemoRow) => d.prepOwnerId === user.id || d.conductedById === user.id,
-    );
-
-  if (!involved) notFound();
+  const users = isManagerRole(user.role)
+    ? await prisma.user.findMany({
+        where: {
+          isActive: true,
+          role: { in: ["SalesMember", "SalesManager", "SocialMediaManager"] },
+        },
+        orderBy: { name: "asc" },
+      })
+    : [];
 
   return (
     <div>
       <PageHeader
-        title={lead.organization.orgName}
-        description={`${lead.leadCode} · ${lead.product.name} · Phase ${lead.currentPhase} ${phaseName(lead.currentPhase)}`}
+        title={`${lead.leadCode} · ${lead.organization.orgName}`}
+        description={`${lead.product.name} · Owner: ${lead.owner?.name ?? "Unassigned"}`}
         actions={
-          <div className="flex gap-2">
-            <Link
-              href="/calendar"
-              className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm"
-            >
-              Calendar
-            </Link>
-            <Link
-              href={`/documents?leadId=${lead.id}`}
-              className="rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white"
-            >
-              Documents
-            </Link>
-          </div>
+          <Link href="/leads" className="text-sm text-[var(--muted)] hover:text-[var(--ink)]">
+            ← Leads
+          </Link>
         }
       />
 
       <div className="mb-4 flex flex-wrap gap-2">
-        <Badge tone="accent">{lead.phaseStatus}</Badge>
-        <Badge tone="info">{lead.outcome}</Badge>
-        {lead.owner ? <Badge>Owner: {lead.owner.name}</Badge> : null}
-        {lead.primaryContact ? (
-          <Badge>
-            Contact: {lead.primaryContact.fullName}
-            {lead.primaryContact.designation
-              ? ` (${lead.primaryContact.designation})`
-              : ""}
-          </Badge>
-        ) : null}
+        <Badge tone="accent">{lead.salesStage}</Badge>
+        {lead.temperature ? <Badge tone="warn">{lead.temperature}</Badge> : null}
+        {lead.qualification ? <Badge>{lead.qualification}</Badge> : null}
+        <Badge tone="neutral">{lead.status}</Badge>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
-          <Panel title="Lead 360">
-          <dl className="grid gap-3 sm:grid-cols-2 text-sm">
-            <div>
-              <dt className="text-xs text-[var(--muted)]">Next action</dt>
-              <dd>{lead.nextAction ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-[var(--muted)]">Next action date</dt>
-              <dd>
-                {lead.nextActionDate
-                  ? format(lead.nextActionDate, "dd MMM yyyy")
-                  : "—"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-[var(--muted)]">ICP / trigger</dt>
-              <dd>
-                {lead.icpFit ?? "—"}
-                {lead.triggerEvent ? ` · ${lead.triggerEvent}` : ""}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-[var(--muted)]">Furthest phase</dt>
-              <dd>
-                {lead.furthestPhaseReached} · {phaseName(lead.furthestPhaseReached)}
-              </dd>
-            </div>
-            <div className="sm:col-span-2">
-              <dt className="text-xs text-[var(--muted)]">Organization</dt>
-              <dd>
-                {lead.organization.city}, {lead.organization.state} ·{" "}
-                {lead.organization.industry} · {lead.organization.orgStatus}
-              </dd>
-            </div>
-          </dl>
-          </Panel>
-
-          {lead.outcome === "Active" ? (
-            <LeadActions
-              leadId={lead.id}
-              currentPhase={lead.currentPhase}
-              people={people.map((p: UserLite) => ({ id: p.id, name: p.name, role: p.role }))}
+      <div className="mb-6 grid gap-4 lg:grid-cols-3">
+        <Panel title="Organization">
+          <dl className="space-y-1 text-sm">
+            <Row label="Industry" value={lead.organization.industry} />
+            <Row
+              label="Location"
+              value={[lead.organization.city, lead.organization.state]
+                .filter(Boolean)
+                .join(", ")}
             />
-          ) : null}
-
-          <LeadEditPanel
-            leadId={lead.id}
-            orgName={lead.organization.orgName}
-            city={lead.organization.city}
-            state={lead.organization.state}
-            industry={lead.organization.industry}
-            nextAction={lead.nextAction}
-            nextActionDate={lead.nextActionDate?.toISOString() ?? null}
-            icpFit={lead.icpFit}
-            triggerEvent={lead.triggerEvent}
-            people={people.map((p: UserLite) => ({
-              id: p.id,
-              name: p.name,
-              role: p.role,
-            }))}
-            isManager={isManagerRole(user.role)}
-            currentOwnerId={lead.ownerId}
-          />
-        </div>
-
-        <Panel title="Timeline">
-          <ul className="space-y-3">
-            {lead.phaseHistory.map((h: PhaseHistoryRow) => (
-              <li key={h.id} className="border-l-2 border-[var(--accent)] pl-3">
-                <p className="text-sm font-medium">
-                  {h.fromPhase != null ? `P${h.fromPhase} → ` : ""}P{h.toPhase}:{" "}
-                  {h.toStatus}
-                </p>
-                <p className="text-xs text-[var(--muted)]">
-                  {format(h.createdAt, "dd MMM · HH:mm")}
-                  {h.changedBy ? ` · ${h.changedBy.name}` : ""}
-                </p>
-              </li>
-            ))}
-          </ul>
+            <Row label="Website" value={lead.organization.websiteDomain} />
+            <Row label="Source" value={lead.source} />
+            <Row label="Campaign" value={lead.campaign} />
+          </dl>
         </Panel>
-
-        <Panel title="Meetings">
-          {lead.meetings.length === 0 ? (
-            <p className="text-sm text-[var(--muted)]">No meetings yet.</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {lead.meetings.map((m: MeetingRow) => (
-                <li key={m.id} className="rounded-lg bg-[var(--surface)] px-3 py-2">
-                  <p className="font-medium">{m.meetingCode}</p>
-                  <p className="text-xs text-[var(--muted)]">
-                    {m.scheduledAt
-                      ? format(m.scheduledAt, "dd MMM yyyy · h:mm a")
-                      : "Unscheduled"}{" "}
-                    · {m.status}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
+        <Panel title="Contact">
+          <dl className="space-y-1 text-sm">
+            <Row label="Name" value={lead.contact?.fullName} />
+            <Row label="Designation" value={lead.contact?.designation} />
+            <Row label="Email" value={lead.contact?.email} />
+            <Row label="Phone" value={lead.contact?.phone} />
+          </dl>
         </Panel>
-
-        <Panel title="Demos">
-          {lead.demos.length === 0 ? (
-            <p className="text-sm text-[var(--muted)]">No demos yet.</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {lead.demos.map((d: DemoRow) => (
-                <li key={d.id} className="rounded-lg bg-[var(--surface)] px-3 py-2">
-                  <p className="font-medium">{d.demoCode}</p>
-                  <p className="text-xs text-[var(--muted)]">
-                    {d.scheduledAt
-                      ? format(d.scheduledAt, "dd MMM yyyy · h:mm a")
-                      : "Unscheduled"}{" "}
-                    · {d.status}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-
-        <Panel title="Documents on this lead">
-          {lead.documents.length === 0 ? (
-            <p className="text-sm text-[var(--muted)]">No documents uploaded.</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {lead.documents.map((d: DocumentRow) => (
-                <li key={d.id}>
-                  <Link
-                    href={`/documents?preview=${d.id}`}
-                    className="font-medium hover:text-[var(--accent)]"
-                  >
-                    {d.title}
-                  </Link>
-                  <p className="text-xs text-[var(--muted)]">
-                    {d.documentType} · v{d.versionNo}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
+        <Panel title="Next">
+          <dl className="space-y-1 text-sm">
+            <Row label="Next action" value={lead.nextAction} />
+            <Row
+              label="Follow-up"
+              value={
+                lead.nextFollowUpAt
+                  ? lead.nextFollowUpAt.toLocaleString()
+                  : null
+              }
+            />
+            <Row label="Pain point" value={lead.painPoint} />
+            {lead.wonValue != null ? (
+              <Row label="Won value" value={`₹${lead.wonValue}`} />
+            ) : null}
+            {lead.lostReason ? <Row label="Lost reason" value={lead.lostReason} /> : null}
+          </dl>
         </Panel>
       </div>
+
+      <LeadWorkspace
+        leadId={lead.id}
+        salesStage={lead.salesStage}
+        temperature={lead.temperature}
+        isManager={isManagerRole(user.role)}
+        users={users.map((u) => ({ id: u.id, name: u.name }))}
+        followUps={lead.followUps.map((f) => ({
+          id: f.id,
+          followUpNumber: f.followUpNumber,
+          status: f.status,
+          dueAt: f.dueAt?.toISOString() ?? null,
+          notes: f.notes,
+        }))}
+        meetings={lead.meetings.map((m) => ({
+          id: m.id,
+          meetingType: m.meetingType,
+          status: m.status,
+          scheduledAt: m.scheduledAt?.toISOString() ?? null,
+          outcome: m.outcome,
+        }))}
+        demos={lead.demos.map((d) => ({
+          id: d.id,
+          status: d.status,
+          scheduledAt: d.scheduledAt?.toISOString() ?? null,
+          interestLevel: d.interestLevel,
+        }))}
+        requirements={lead.requirements.map((r) => ({
+          id: r.id,
+          requirementType: r.requirementType,
+          description: r.description,
+          status: r.status,
+        }))}
+        clientRequests={lead.clientRequests.map((r) => ({
+          id: r.id,
+          title: r.title,
+          requestType: r.requestType,
+          status: r.status,
+          resource: r.resource
+            ? {
+                id: r.resource.id,
+                title: r.resource.title,
+                resourceType: r.resource.resourceType,
+                sharePointUrl: r.resource.sharePointUrl,
+              }
+            : null,
+        }))}
+        opportunities={lead.opportunities.map((o) => ({
+          id: o.id,
+          opportunityValue: o.opportunityValue,
+          probability: o.probability,
+          salesStage: o.salesStage,
+          negotiationStatus: o.negotiationStatus,
+        }))}
+        activities={lead.activities.map((a) => ({
+          id: a.id,
+          activityType: a.activityType,
+          title: a.title,
+          detail: a.detail,
+          occurredAt: a.occurredAt.toISOString(),
+        }))}
+      />
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <dt className="text-[var(--muted)]">{label}</dt>
+      <dd className="text-right font-medium">{value || "—"}</dd>
     </div>
   );
 }

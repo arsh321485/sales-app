@@ -1,0 +1,292 @@
+SALES PIPELINE & BUSINESSACTIVITY MANAGEMENT APPLICATION
+Simplified Developer Requirements & Workflow
+Functional scope retained from the original specification, reorganized for easier implementation.
+1. Purpose and Product Scope
+Build one centralized application to manage the complete sales and business activity process: outreach, leads, follow-ups, meetings, demos, client requirements and requests, proposals/documents, opportunities, negotiations, closure, team management, revenue targets and analytics, social media activity, notifications, SharePoint sales resources, and management reporting.
+Initial products
+Lead ID prefix
+Example
+VaptFix
+VF
+VF001
+GRCMentor
+GM
+GM001
+GRCDepartment
+GD
+GD001
+AIDL
+AI
+AI001
+TestMyPlan
+TMP
+TMP001
+The product list must be configurable so more products can be added later without redesigning the application.
+2. The Most Important Business Rules
+Create the product-specific Lead ID when a prospect is first entered into Outreach. Numbering is sequential per product (VF001, VF002; GM001, GM002; GD001, GD002; AI001, AI002; TMP001, TMP002).
+The same Lead ID must remain attached from Outreach through Lead, Follow-up, Meeting, Demo, Requirement, Proposal, Pricing, Opportunity, Negotiation and Closure. Never create a new ID just because the record moves to another stage.
+If the same company enters the pipeline for another product, create a separate product-specific Lead ID and link the records to the same company/contact.
+Sales Stage and Activity are different: stage tells management where an opportunity stands; activities record what happened or what needs to happen.
+Do not force a fixed sequence. A requirement, proposal, meeting, demo, pricing request, document request or follow-up may happen at any point and multiple times.
+Avoid duplicate data entry. Selecting an existing Lead ID should automatically bring forward company, contact, product, owner, previous activities and client history. Users enter only details relevant to the new activity.
+Sales stage (current opportunity position)
+Examples of activities (can happen in any order)
+New → Qualified → Engaged → Opportunity → Negotiation → Won / Lost / On Hold
+Outreach; follow-up; meeting; demo; requirement; proposal request/sent; pricing request/sent; presentation request; document request; NDA; SOW; technical question; client support request; other client request
+3. Main End-to-End Workflow
+Login  ↓  Role-based dashboard  ↓  Outreach / import leads  ↓  Generate Lead ID  ↓  Qualify and assign lead  ↓  Record any activity  ↓  Handle requests and documents  ↓  Opportunity  ↓  Negotiation  ↓  Won / Lost / On Hold  ↓  Analytics
+User logs in; the application displays the pages and actions allowed by their role.
+A prospect is manually entered or imported from MapLeadGenerator (integration details in Section 7).
+The user selects the product. The application creates the next product-specific Lead ID.
+The lead is qualified, classified Hot/Warm/Cold, assigned to an owner and given a next action/follow-up where applicable.
+Against the same Lead ID, the team can add follow-ups, meetings, demos, requirements, client requests, proposals, pricing, documents, NDA, SOW or other activities in any order.
+When a client requests something, create a Client Request. Notify the owner and show the appropriate SharePoint resource where relevant.
+The assigned member completes the action, records the result and marks it complete/sent. A follow-up can be created manually or automatically.
+When the deal is serious, create/update an Opportunity with value, probability, expected closure date and next action.
+Track negotiation and close as Won, Lost or On Hold.
+For Won deals, record final value, closure date and revenue; update target, product/member/team analytics and the Master Dashboard.
+4. Example Journeys the System Must Support
+Scenario
+Workflow
+Proposal before meeting (VF001)
+Outreach → proposal requested → proposal sent → meeting → requirement → demo → negotiation → Won
+Requirement before meeting (GM001)
+Outreach → client shares requirement → requirement recorded → meeting → demo → proposal → follow-up → Won
+Proposal after meeting (GD001)
+Outreach → meeting → requirement → proposal requested → proposal sent → pricing discussion → negotiation → Won
+Multiple requirements (AI001)
+Outreach → meeting → Requirement 1 → proposal → Requirement 2 → revised proposal → Requirement 3 → negotiation → Won
+All four journeys must work in the same application. A client may ask for an initial, revised, commercial or technical proposal; each stays under the original Lead ID.
+5. Application Navigation / Pages
+Menu
+Pages and key purpose
+Dashboard
+Master Sales Dashboard; management-wide KPIs and clickable drill-downs
+Sales
+Outreach; Leads; Follow-ups; Meetings; Demos; Requirements; Client Requests; Opportunities; Closure
+My Work
+My Tasks; My Follow-ups; My Meetings; My Client Requests; My Pending Actions
+Team
+Team Members; Assignments; Member Performance
+Products
+VaptFix; GRCMentor; GRCDepartment; AIDL; TestMyPlan; allow future products
+Revenue
+Revenue Targets; Revenue Analytics
+Sales Resources
+SharePoint Documents; Proposals; Presentations; Pricing; Case Studies; Other Resources
+Social Media
+Content Calendar; Posts; Social Follow-ups; Social Analytics
+Analytics
+Sales Analytics; Product Analytics; Team Analytics; Revenue Analytics; Social Analytics; Email Outreach Analytics (Sendy integration)
+Lead Generation
+MapLeadGenerator integration and imported lead Excel/data view
+Notifications
+Central notification center with priority and due/overdue alerts
+Settings
+Users, roles, permissions, products, integration configuration and other application settings
+6. Login, Roles and Access
+Login features: email/username, password, forgot password, role-based access, user status and permission management.
+Support any number of team members. Users only see data and actions permitted by their role.
+Role
+Access
+Super Admin
+Full access to users, roles, products, sales, social media, revenue, documents, analytics and settings.
+Sales Manager
+Sales team, leads, assignments, follow-ups, meetings, pipeline, opportunities, revenue and team analytics.
+Sales Member / SDR
+Assigned outreach, leads, follow-ups, meetings, demos, requirements, client requests, proposals and opportunities.
+Social Media Manager
+Content calendar, posts, assignments, publishing, social engagement, social follow-ups and social analytics.
+Management / Viewer
+View Master Dashboard, sales analytics, revenue, team performance, product performance and social media performance.
+7. Integrations: MapLeadGenerator and Sendy
+7.1 MapLeadGenerator — Lead Generation and Excel View
+Goal: allow users to obtain lead lists from MapLeadGenerator and view the resulting leads/Excel sheet inside this application, instead of keeping the lead-generation output disconnected from the sales workflow.
+Open Lead Generation  ↓  Connect to / open MapLeadGenerator  ↓  Generate or select lead list  ↓  Import Excel or synced records  ↓  Preview and validate  ↓  Map columns  ↓  Choose product and owner  ↓  Import leads  ↓  Create/attach Lead IDs  ↓  Track in Sales
+Provide a Lead Generation / MapLeadGenerator page with an option to connect to MapLeadGenerator and retrieve or upload its lead output.
+Show the generated lead Excel sheet or a spreadsheet-style preview inside the application. Allow users to inspect rows and columns before import.
+Support Excel file upload as a fallback if direct API/connector access is not available. Do not assume a specific API exists; the developer should confirm MapLeadGenerator's supported API/export and authentication method.
+Validate required fields, identify blank or malformed values, and show import errors before confirming import.
+Allow column mapping for company, contact person, designation, email, phone, LinkedIn, country/region (if supplied), source, campaign and other available columns. Preserve additional source columns where practical.
+Before creating new leads, check for likely duplicates using available identifiers such as email, LinkedIn URL and company/contact. Show possible duplicates for review; do not silently create duplicate records.
+During import, user selects the product and may assign an owner/campaign. Create the product-specific Lead ID for each accepted new prospect. If an existing record is matched, let the user link/update it according to permissions and preserve its existing Lead ID.
+Save import source, import date, source file/list name, selected product, imported-by user, successful rows, skipped rows and error rows for audit/reporting.
+Imported leads must appear in Outreach/Leads, use the same workflow as manually entered leads, and feed dashboards/analytics. Keep the original source data available where possible.
+Developer decision required: confirm MapLeadGenerator API availability, authentication, rate limits, data fields and whether a live connection or export/import is supported. The application must support Excel upload if a live integration is not available.
+7.2 Sendy — Email Outreach Campaign Analytics
+Goal: integrate Sendy so the application can display email outreach campaigns and their analytics alongside the relevant product, campaign, lead and follow-up records.
+Connect Sendy  ↓  Retrieve/select campaign  ↓  Match campaign to product and lead list  ↓  Sync campaign/contact results  ↓  Display campaign dashboard  ↓  Identify replies/engagement where data is available  ↓  Create follow-up tasks  ↓  Report conversions
+Provide Sendy connection settings for the authorized account/API credentials and a safe way to store secrets. Confirm the supported Sendy API/version and required permissions before implementation.
+Show campaign-level analytics, with filters for date range, product, campaign and owner where the underlying data supports those filters.
+Display available campaign metrics, including sent/delivered, opens, unique opens, clicks/unique clicks, bounces, unsubscribes and other metrics exposed by Sendy. Clearly distinguish unavailable metrics; do not fabricate values.
+Provide a campaign detail view with contact-level status/results where Sendy makes those data available, and a campaign-to-lead mapping using email and/or other reliable identifiers.
+Link a Sendy campaign to one of the five products and, where possible, to the imported MapLeadGenerator list, outreach record and assigned owner.
+Show email outreach analytics on the Master Dashboard and in Analytics. Support product-wise and campaign-wise comparison, trend charts, and drill-down from a KPI to the relevant campaign/contact records.
+Use campaign results to help users manage follow-ups. Contacts needing follow-up should be identifiable, and a user should be able to create/record Follow-up 1, Follow-up 2 or another follow-up against the same Lead ID.
+Do not automatically treat an open or click as a qualified lead or a reply. Engagement can inform prioritization, but qualification and closure should follow the sales process unless a confirmed response signal is available.
+Handle sync failures, duplicate events and stale data clearly. Show last successful sync time and allow authorized users to refresh/sync where supported.
+Respect unsubscribe/suppression status from Sendy. Do not re-add unsubscribed contacts to an outreach audience through an import or sync.
+Developer decision required: verify which campaign, subscriber and event metrics Sendy's available API exposes for this account. If a required metric cannot be retrieved directly, label it unavailable or use an authorized export/import approach rather than estimating it.
+Integration
+Application output
+Must remain linked to
+MapLeadGenerator
+Lead list / Excel-style preview, validated import, import log and imported records
+Product, campaign/source, owner and product-specific Lead ID
+Sendy
+Campaign analytics, contact results where available, sync status and follow-up cues
+Product, campaign, contact/email, Lead ID and owner where matching is possible
+8. Outreach, Leads and Follow-ups
+Outreach fields
+Lead ID; Company; Contact person; Designation; Email; Phone; LinkedIn; Product; Outreach channel; Outreach date; Assigned member; Campaign; Status; Notes.
+When Outreach is created: select product → automatically generate Lead ID (example: VaptFix → VF001). Outreach can be created manually or from a validated MapLeadGenerator import.
+Lead fields
+Lead ID; Company; Contact; Product; Owner; Source; Qualification; Hot/Warm/Cold; Pain point; Status; Notes; Next action; Next follow-up.
+Follow-up fields and statuses
+Fields: Lead ID; Client; Product; Owner; Date; Follow-up number; Status; Notes; Next action.
+Statuses: Pending; Completed; Rescheduled; Overdue; Cancelled.
+The application must show pending and overdue follow-ups, including Follow-up 1 and Follow-up 2 where used. Follow-ups are activities attached to the original Lead ID.
+9. Meetings, Demos, Requirements and Client Requests
+Meetings
+Fields: Lead ID; Client; Company; Product; Owner; Date; Time; Meeting type; Participants; Status; Notes; Outcome; Next action.
+Meetings are activities, not mandatory stages. A meeting may occur before or after a proposal, requirement, demo, pricing or any other activity.
+Demos
+Fields: Lead ID; Product; Client; Demo date; Participants; Owner; Status; Feedback; Interest level; Requirements identified; Next action.
+A demo may happen before or after a proposal or requirement.
+Requirements
+Requirements may be captured before, during or after a meeting; before/after a demo; after a proposal; during negotiation; or at any other point.
+Fields: Lead ID; Product; Requirement type; Requirement description; Business requirement; Technical requirement; Scope; Timeline; Budget; Decision maker; Status; Notes; Next action; Date received.
+Allow multiple requirements against the same Lead ID.
+Client Requests
+Requests are independent activities and may occur at any point.
+Request types: proposal; pricing; presentation; company profile; brochure; case study; technical documentation; NDA; SOW; agreement; other document; other information.
+Every request is linked to the same Lead ID.
+10. Proposal and SharePoint Resource Workflow
+Client asks for document  ↓  Create Client Request  ↓  Notify owner  ↓  Show product + request-matched SharePoint resource  ↓  Send document  ↓  Mark as Sent  ↓  Log who/what/when  ↓  Create optional follow-up
+Proposal requests can happen at any point and can repeat. Support initial, revised, commercial and technical proposals under the same Lead ID.
+When a proposal is requested: create Client Request → notify member → show relevant product proposal link in SharePoint → member sends it → member selects Mark as Sent → store Lead ID, product, document, sent by and sent date/time → optionally create a follow-up automatically.
+Sales documents remain in SharePoint; the application stores and displays links. The member should not have to search SharePoint manually.
+Show the appropriate resource based on Product + Client Request. Resource types include proposals, presentations, pricing, case studies and other resources.
+Product
+Example resource mapping
+VaptFix
+VaptFix Proposal (Proposal); VaptFix Presentation (Presentation); VaptFix Pricing (Pricing)
+GRCMentor
+GRCMentor Proposal (Proposal)
+GRCDepartment
+GRCDepartment Presentation (Presentation)
+All products
+Allow additional links for pricing, case studies and other resources as configured
+My Work example: VF001 — client requested a VaptFix proposal → open request → open proposal link → send to client → Mark as Sent → create follow-up.
+11. Opportunities, Negotiation and Closure
+Create an Opportunity when the client becomes a serious business opportunity. Keep it linked to the original Lead ID.
+Opportunity fields: Lead ID; Product; Company; Opportunity value; Owner; Sales stage; Probability; Expected closure date; Negotiation status; Notes; Next action.
+Outcome
+Information to record
+System updates
+Won
+Final value; closure date; product; owner; revenue
+Revenue; revenue target; product analytics; member analytics; team analytics; Master Dashboard
+Lost
+Lost reason; date; competitor if applicable; notes
+Closure and loss analytics
+On Hold
+Current status and notes/next action as applicable
+Pipeline and management views reflect On Hold
+12. Activity Timeline
+Every Lead ID must have one complete chronological timeline containing all activities regardless of order.
+Example for VF001 — ABC Corporation: Oct 1 outreach completed; Oct 2 client responded; Oct 3 proposal requested; Oct 3 proposal sent; Oct 5 meeting completed; Oct 5 requirement received; Oct 7 demo completed; Oct 8 additional requirement received; Oct 9 revised proposal sent; Oct 12 pricing discussion; Oct 15 negotiation; Oct 20 deal Won.
+13. My Work Dashboard
+Group
+Items to show
+Today
+Follow-ups; meetings; demos; client requests; documents to send; other tasks
+Pending
+New leads; outreach; requirements; proposals; pricing requests; other client requests
+Overdue
+Overdue follow-ups; overdue client requests; overdue tasks
+The page should answer: “What do I need to do next?” Each item should open the relevant record and provide a way to complete/update it.
+14. Master Dashboard and Analytics
+Master Sales Dashboard KPIs
+Total Outreach; New Leads; Qualified Leads; Unqualified Leads; Hot Leads; Warm Leads; Cold Leads; Pending Follow-ups; Overdue Follow-ups; Upcoming Meetings; Completed Meetings; Demos; Requirements; Client Requests; Proposals; Open Opportunities; Negotiations; Won Deals; Lost Deals; Pipeline Value; Expected Revenue; Closed Revenue; Revenue Target; Target Achievement.
+Every KPI must be clickable and open its underlying records. Example: click “25 Open Opportunities” to see those 25 opportunity records.
+Product, team and individual analytics
+Compare VaptFix, GRCMentor, GRCDepartment, AIDL and TestMyPlan.
+Team/member table should show member, product, leads, follow-ups, meetings, demos, proposals, opportunities and wins.
+Individual analytics: outreach; leads; qualified leads; Hot/Warm/Cold; follow-ups; meetings; demos; requirements; proposals; opportunities; Won/Lost; pipeline value; revenue; conversion rate; target achievement.
+Show which product each member targets and their current progress.
+Master reporting categories and filters
+Sales: outreach, leads, qualification, follow-ups, meetings, demos, requirements, proposals, opportunities and closure.
+Products: VaptFix, GRCMentor, GRCDepartment, AIDL and TestMyPlan.
+Team: member performance, team performance, conversion and revenue.
+Social: platform performance, post performance, engagement and leads generated.
+Email outreach: Sendy campaign performance and contact results where available.
+Filters: date; product; team; member; role; lead source; lead status; lead temperature; sales stage; social platform; campaign.
+15. Revenue Targets and Revenue Analytics
+Include a separate, configurable Revenue Target page. The target has not yet been finalized; do not hard-code a target. Authorized users must be able to edit targets.
+Target periods/scopes: annual; quarterly; monthly; team-wise; individual; product-wise.
+Example only: target ₹10,00,000; achieved ₹6,50,000; remaining ₹3,50,000; achievement 65%.
+Revenue analytics must connect the pipeline: Lead → Opportunity → Expected Revenue → Won → Actual Revenue.
+Analytics: product-wise revenue; member-wise revenue; team-wise revenue; monthly revenue; quarterly revenue; expected revenue; actual revenue; target vs actual; remaining target.
+16. Social Media Department
+Supported platforms: LinkedIn, Instagram, Reddit, Pinterest and X/Twitter.
+Manage content calendar; posts; product; platform; assigned person; approval; scheduling; publishing; analytics; engagement; follow-ups.
+Content idea  ↓  Draft  ↓  Review / approval  ↓  Scheduled  ↓  Published  ↓  Analytics  ↓  Engagement  ↓  Follow-up  ↓  Potential lead
+If engagement becomes a genuine sales opportunity, convert it into a sales lead. Example: LinkedIn interaction about VaptFix → interested prospect → Convert to Lead → create VF001 → normal sales process.
+Track available metrics: posts; published posts; reach; impressions; engagement; clicks; comments; shares/reposts; platform performance; post-level performance. Exact metrics depend on each platform and its available integration/API.
+17. Notifications and Priorities
+Sales notifications: new lead assigned; outreach due/overdue; follow-up due/overdue; meeting scheduled/reminder/rescheduled/cancelled; demo scheduled; requirement received; new client request; proposal requested; pricing requested; document requested; opportunity created/updated/approaching closure; deal won/lost.
+Social notifications: post assigned; approval required; post scheduled; post published; new engagement; social follow-up required.
+High priority: client request; proposal request; overdue activity; important meeting.
+Medium priority: upcoming follow-up; upcoming meeting; new assignment.
+Normal priority: general/system updates.
+18. Automation Rules
+Trigger
+Expected automated actions
+Meeting created
+Add to dashboard → notify relevant user → schedule reminder
+Meeting completed
+Ask for outcome → ask for next action
+Proposal requested
+Create client request → notify member → show SharePoint document → allow Mark as Sent → create follow-up
+Requirement received
+Create requirement activity → notify assigned member → add to My Work
+Follow-up due
+Notify user → add My Work task
+Follow-up overdue
+Mark overdue → notify member → optionally notify manager
+Deal Won
+Update revenue → target → product analytics → member analytics → Master Dashboard
+Qualified social engagement
+Allow conversion to lead
+MapLeadGenerator import
+Validate rows → detect possible duplicates → log import → create/link leads and update dashboards
+Sendy sync
+Refresh available campaign/contact analytics → record sync status/time → update relevant analytics and follow-up cues
+19. Integration and Data Quality Rules
+All sales activities, client requests, documents, follow-ups and opportunities must reference the same Lead ID wherever applicable.
+MapLeadGenerator imports and Sendy campaign data should be linked to products/campaigns and leads only where a reliable match exists; show unmatched records for review rather than guessing.
+Keep audit information for imports, syncs and document sends where described in this specification.
+Avoid duplicate data entry and duplicate leads. Preserve existing Lead IDs when matching an existing record.
+Respect role permissions for viewing, importing, editing, syncing, assigning and reporting.
+Show integration errors and last successful sync time; never present unavailable integration metrics as if they were real.
+20. Final Developer Checklist
+☐ Login, forgot password, user status, roles and permissions
+☐ Configurable products and sequential product-specific Lead IDs
+☐ Flexible sales stages and activity-based workflows
+☐ Outreach, leads, qualification and Hot/Warm/Cold classification
+☐ Follow-ups including Follow-up 1 / Follow-up 2, due and overdue tracking
+☐ Meetings, demos, multiple requirements and client requests
+☐ Proposal workflow with Mark as Sent and SharePoint resource links
+☐ Opportunities, negotiation, Won/Lost/On Hold and revenue updates
+☐ Chronological Lead ID activity timeline
+☐ My Work dashboard and centralized notifications
+☐ Master Dashboard with clickable KPI drill-downs
+☐ Member/team/product analytics and configurable revenue targets
+☐ Social media calendar, workflow, follow-ups and available analytics
+☐ MapLeadGenerator connection or Excel upload, preview, column mapping, duplicate review and import log
+☐ Sendy connection, campaign analytics, contact results where available, sync status and follow-up cues
+☐ Filters, reporting, permission checks and integration error handling
+21. Core Operating Principle
+TRACK  ↓  ASSIGN  ↓  NOTIFY  ↓  ACT  ↓  UPDATE  ↓  ANALYZE  ↓  CLOSE  ↓  MEASURE REVENUE
+The application should not merely store information; it should guide the team. It must answer: What happened? (Activity Timeline) What do I do next? (My Work) What does the client need? (Client Requests) What document should I send? (Sales Resources / SharePoint) Where is the opportunity? (Sales Stage / Opportunity) What is the team doing? (Team Analytics) How much revenue have we generated? (Revenue Analytics) Are we achieving the target? (Revenue Target) What needs attention? (Notifications)

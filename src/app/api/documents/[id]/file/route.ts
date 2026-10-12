@@ -14,17 +14,18 @@ export async function GET(
     where: { id, isDeleted: false },
   });
 
-  if (!doc) {
+  if (!doc || !doc.storagePath) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const filePath = path.join(process.cwd(), "uploads", doc.storagePath);
   try {
     const buf = await readFile(filePath);
+    const fileName = (doc.fileName ?? "document").replace(/"/g, "");
     return new NextResponse(buf, {
       headers: {
-        "Content-Type": doc.mimeType,
-        "Content-Disposition": `inline; filename="${doc.fileName.replace(/"/g, "")}"`,
+        "Content-Type": doc.mimeType ?? "application/octet-stream",
+        "Content-Disposition": `inline; filename="${fileName}"`,
         "Cache-Control": "private, max-age=60",
       },
     });
