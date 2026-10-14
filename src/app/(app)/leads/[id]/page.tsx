@@ -27,12 +27,10 @@ export default async function LeadDetailPage({
       followUps: { orderBy: { createdAt: "desc" } },
       meetings: { orderBy: { scheduledAt: "desc" } },
       demos: { orderBy: { scheduledAt: "desc" } },
-      requirements: { orderBy: { receivedAt: "desc" } },
       clientRequests: {
         orderBy: { createdAt: "desc" },
         include: { resource: true },
       },
-      opportunities: { orderBy: { createdAt: "desc" } },
       documents: { where: { isDeleted: false }, orderBy: { uploadedAt: "desc" } },
     },
   });
@@ -118,6 +116,7 @@ export default async function LeadDetailPage({
         temperature={lead.temperature}
         isManager={isManagerRole(user.role)}
         users={users.map((u) => ({ id: u.id, name: u.name }))}
+        teamsMeetingUrlDefault={process.env.NEXT_PUBLIC_TEAMS_MEETING_URL || undefined}
         followUps={lead.followUps.map((f) => ({
           id: f.id,
           followUpNumber: f.followUpNumber,
@@ -138,12 +137,6 @@ export default async function LeadDetailPage({
           scheduledAt: d.scheduledAt?.toISOString() ?? null,
           interestLevel: d.interestLevel,
         }))}
-        requirements={lead.requirements.map((r) => ({
-          id: r.id,
-          requirementType: r.requirementType,
-          description: r.description,
-          status: r.status,
-        }))}
         clientRequests={lead.clientRequests.map((r) => ({
           id: r.id,
           title: r.title,
@@ -157,13 +150,6 @@ export default async function LeadDetailPage({
                 sharePointUrl: r.resource.sharePointUrl,
               }
             : null,
-        }))}
-        opportunities={lead.opportunities.map((o) => ({
-          id: o.id,
-          opportunityValue: o.opportunityValue,
-          probability: o.probability,
-          salesStage: o.salesStage,
-          negotiationStatus: o.negotiationStatus,
         }))}
         activities={lead.activities.map((a) => ({
           id: a.id,

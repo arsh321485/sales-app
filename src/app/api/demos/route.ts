@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
-import { canViewAllLeads } from "@/lib/constants";
+import { canViewAllLeads, defaultTeamsMeetingUrl } from "@/lib/constants";
 import { logActivity, notify } from "@/lib/leads";
 
 export async function POST(req: Request) {
@@ -9,7 +9,10 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json();
   const leadId = String(body.leadId ?? "");
-  const lead = await prisma.lead.findUnique({ where: { id: leadId } });
+  const lead = await prisma.lead.findUnique({
+    where: { id: leadId },
+    include: { product: true },
+  });
   if (!lead || lead.isDeleted) {
     return NextResponse.json({ error: "Lead not found" }, { status: 404 });
   }
@@ -18,14 +21,32 @@ export async function POST(req: Request) {
   }
 
   const scheduledAt = body.scheduledAt ? new Date(String(body.scheduledAt)) : null;
+  const teamsMeetingUrl =
+    String(body.teamsMeetingUrl ?? "").trim() || defaultTeamsMeetingUrl();
+  const count = await prisma.demo.count({ where: { leadId } });
+  const demoCode =
+    String(body.demoCode ?? "").trim() ||
+    `${lead.product.prefix}-DMO-${String(count + 1).padStart(3, "0")}`;
+
   const demo = await prisma.demo.create({
     data: {
       leadId,
       ownerId: lead.ownerId ?? user.id,
+      demoCode,
       scheduledAt,
       participants: String(body.participants ?? "").trim() || null,
       status: "Scheduled",
       nextAction: String(body.nextAction ?? "").trim() || null,
+      teamsMeetingUrl,
+    },
+  });
+
+  await prisma.lead.update({
+    where: { id: leadId },
+    data: {
+      nextAction: "demo",
+      nextPhase: "Demo",
+      nextFollowUpAt: scheduledAt,
     },
   });
 
@@ -34,6 +55,7 @@ export async function POST(req: Request) {
     userId: user.id,
     activityType: "Demo",
     title: "Demo scheduled",
+    detail: teamsMeetingUrl,
   });
 
   if (lead.ownerId) {
@@ -69,6 +91,10 @@ export async function PATCH(req: Request) {
           ? String(body.requirementsIdentified)
           : demo.requirementsIdentified,
       nextAction: body.nextAction != null ? String(body.nextAction) : demo.nextAction,
+      teamsMeetingUrl:
+        body.teamsMeetingUrl != null
+          ? String(body.teamsMeetingUrl)
+          : demo.teamsMeetingUrl,
     },
   });
 

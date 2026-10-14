@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
-import { canViewAllLeads } from "@/lib/constants";
+import { canViewAllLeads, defaultTeamsMeetingUrl } from "@/lib/constants";
 import { logActivity, notify } from "@/lib/leads";
 
 export async function POST(req: Request) {
@@ -18,6 +18,9 @@ export async function POST(req: Request) {
   }
 
   const scheduledAt = body.scheduledAt ? new Date(String(body.scheduledAt)) : null;
+  const teamsMeetingUrl =
+    String(body.teamsMeetingUrl ?? "").trim() || defaultTeamsMeetingUrl();
+
   const meeting = await prisma.meeting.create({
     data: {
       leadId,
@@ -28,13 +31,15 @@ export async function POST(req: Request) {
       status: scheduledAt ? "Scheduled" : "To be Scheduled",
       notes: String(body.notes ?? "").trim() || null,
       nextAction: String(body.nextAction ?? "").trim() || null,
+      teamsMeetingUrl,
     },
   });
 
   await prisma.lead.update({
     where: { id: leadId },
     data: {
-      nextAction: "Conduct meeting",
+      nextAction: "to schedule a meeting",
+      nextPhase: "Meeting",
       nextFollowUpAt: scheduledAt,
       salesStage:
         lead.salesStage === "New" || lead.salesStage === "Qualified"
@@ -47,8 +52,8 @@ export async function POST(req: Request) {
     leadId,
     userId: user.id,
     activityType: "Meeting",
-    title: `Meeting scheduled`,
-    detail: meeting.meetingType,
+    title: "Meeting scheduled",
+    detail: teamsMeetingUrl,
   });
 
   if (lead.ownerId) {
@@ -80,6 +85,10 @@ export async function PATCH(req: Request) {
       outcome: body.outcome != null ? String(body.outcome) : meeting.outcome,
       notes: body.notes != null ? String(body.notes) : meeting.notes,
       nextAction: body.nextAction != null ? String(body.nextAction) : meeting.nextAction,
+      teamsMeetingUrl:
+        body.teamsMeetingUrl != null
+          ? String(body.teamsMeetingUrl)
+          : meeting.teamsMeetingUrl,
     },
   });
 

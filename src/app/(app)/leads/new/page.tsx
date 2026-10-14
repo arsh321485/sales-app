@@ -13,23 +13,26 @@ export default async function NewLeadPage() {
       ? prisma.user.findMany({
           where: {
             isActive: true,
-            role: { in: ["SalesMember", "SalesManager", "SocialMediaManager"] },
+            role: { in: ["SalesMember", "SalesManager", "SocialMediaManager", "SuperAdmin"] },
           },
           orderBy: { name: "asc" },
         })
-      : Promise.resolve([]),
+      : Promise.resolve([
+          { id: user.id, name: user.name, role: user.role },
+        ]),
   ]);
 
   return (
     <div>
       <PageHeader
-        title="New outreach"
-        description="Creates org + contact + product lead with a product-specific Lead ID (e.g. VF001). Stage starts at New — qualify or log any activity next."
+        title="New Outreach"
+        description="Create a new outreach record. Outreach date is set automatically (you can change it). Proceed to follow-ups, or schedule a meeting/demo directly when ready."
       />
       <NewLeadForm
         products={products.map((p) => ({ id: p.id, name: p.name, code: p.code }))}
         assignableUsers={users.map((u) => ({ id: u.id, name: u.name, role: u.role }))}
         isManager={isManagerRole(user.role)}
+        currentUserId={user.id}
       />
     </div>
   );

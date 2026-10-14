@@ -2,7 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { REQUEST_TYPES, SALES_STAGES, TEMPERATURES } from "@/lib/constants";
+import {
+  NEXT_ACTIONS,
+  REQUEST_TYPES,
+  SALES_STAGES,
+  TEMPERATURES,
+  defaultTeamsMeetingUrl,
+  followUpLabel,
+} from "@/lib/constants";
 import { Badge, Panel } from "@/components/ui";
 
 const field =
@@ -21,6 +28,7 @@ type LeadWorkspaceProps = {
   temperature: string | null;
   isManager: boolean;
   users: { id: string; name: string }[];
+  teamsMeetingUrlDefault?: string;
   followUps: {
     id: string;
     followUpNumber: number;
@@ -41,25 +49,12 @@ type LeadWorkspaceProps = {
     scheduledAt: string | null;
     interestLevel: string | null;
   }[];
-  requirements: {
-    id: string;
-    requirementType: string | null;
-    description: string | null;
-    status: string;
-  }[];
   clientRequests: {
     id: string;
     title: string;
     requestType: string;
     status: string;
     resource: ResourceLite | null;
-  }[];
-  opportunities: {
-    id: string;
-    opportunityValue: number | null;
-    probability: number | null;
-    salesStage: string;
-    negotiationStatus: string | null;
   }[];
   activities: {
     id: string;
@@ -70,14 +65,18 @@ type LeadWorkspaceProps = {
   }[];
 };
 
+type TabId = "qualify" | "followup" | "meeting" | "demo" | "request" | "stage";
+
 export function LeadWorkspace(props: LeadWorkspaceProps) {
   const router = useRouter();
-  const [tab, setTab] = useState<
-    "qualify" | "followup" | "meeting" | "demo" | "requirement" | "request" | "opportunity" | "stage"
-  >("followup");
+  const [tab, setTab] = useState<TabId>("followup");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [selectedStage, setSelectedStage] = useState(props.salesStage);
+
+  const teamsDefault =
+    props.teamsMeetingUrlDefault?.trim() || defaultTeamsMeetingUrl();
 
   async function call(url: string, body: Record<string, unknown>, method = "POST") {
     setBusy(true);
@@ -92,21 +91,20 @@ export function LeadWorkspace(props: LeadWorkspaceProps) {
     setBusy(false);
     if (!res.ok) {
       setErr(data.error ?? "Failed");
-      return;
+      return false;
     }
     setMsg("Saved");
     router.refresh();
+    return true;
   }
 
-  const tabs = [
-    { id: "qualify" as const, label: "Qualify" },
-    { id: "followup" as const, label: "Follow-up" },
-    { id: "meeting" as const, label: "Meeting" },
-    { id: "demo" as const, label: "Demo" },
-    { id: "requirement" as const, label: "Requirement" },
-    { id: "request" as const, label: "Client request" },
-    { id: "opportunity" as const, label: "Opportunity" },
-    { id: "stage" as const, label: "Stage / close" },
+  const tabs: { id: TabId; label: string }[] = [
+    { id: "qualify", label: "Qualify" },
+    { id: "followup", label: "Follow-up" },
+    { id: "meeting", label: "Meeting" },
+    { id: "demo", label: "Demo" },
+    { id: "request", label: "Client request" },
+    { id: "stage", label: "Stage / close" },
   ];
 
   return (
@@ -135,13 +133,22 @@ export function LeadWorkspace(props: LeadWorkspaceProps) {
             onSubmit={(e) => {
               e.preventDefault();
               const fd = new FormData(e.currentTarget);
-              void call(`/api/leads/${props.leadId}`, {
-                action: "qualify",
-                temperature: fd.get("temperature"),
-                ownerId: fd.get("ownerId") || undefined,
-                nextAction: fd.get("nextAction"),
-                nextFollowUpAt: fd.get("nextFollowUpAt") || undefined,
-              }, "PATCH");
+              const nextAction = String(fd.get("nextAction") ?? "");
+              void call(
+                `/api/leads/${props.leadId}`,
+                {
+                  action: "qualify",
+                  temperature: fd.get("temperature"),
+                  ownerId: fd.get("ownerId") || undefined,
+                  nextAction,
+                  nextFollowUpAt: fd.get("nextFollowUpAt") || undefined,
+                },
+                "PATCH",
+              ).then((ok) => {
+                if (!ok) return;
+                if (nextAction === "to schedule a meeting") setTab("meeting");
+                else if (nextAction === "demo") setTab("demo");
+              });
             }}
           >
             <label className="text-sm">
@@ -165,14 +172,24 @@ export function LeadWorkspace(props: LeadWorkspaceProps) {
                 </select>
               </label>
             ) : null}
-            <label className="text-sm sm:col-span-2">
+            <label className="text-sm">
               <span className="mb-1 block text-[var(--muted)]">Next action</span>
-              <input name="nextAction" className={field} defaultValue="Plan next activity" />
+              <select name="nextAction" className={field} defaultValue="follow-up">
+                {NEXT_ACTIONS.map((a) => (
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="text-sm">
               <span className="mb-1 block text-[var(--muted)]">Next follow-up</span>
               <input name="nextFollowUpAt" type="datetime-local" className={field} />
             </label>
+            <p className="text-xs text-[var(--muted)] sm:col-span-2">
+              Pick &quot;to schedule a meeting&quot; or &quot;demo&quot; to jump straight to that tab — no
+              follow-up required first.
+            </p>
             <div className="sm:col-span-2">
               <button
                 type="submit"
@@ -205,7 +222,13 @@ export function LeadWorkspace(props: LeadWorkspaceProps) {
             </label>
             <label className="text-sm">
               <span className="mb-1 block text-[var(--muted)]">Next action</span>
-              <input name="nextAction" className={field} />
+              <select name="nextAction" className={field} defaultValue="follow-up">
+                {NEXT_ACTIONS.map((a) => (
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="text-sm sm:col-span-2">
               <span className="mb-1 block text-[var(--muted)]">Notes</span>
@@ -235,6 +258,7 @@ export function LeadWorkspace(props: LeadWorkspaceProps) {
                 scheduledAt: fd.get("scheduledAt") || undefined,
                 participants: fd.get("participants"),
                 notes: fd.get("notes"),
+                teamsMeetingUrl: fd.get("teamsMeetingUrl"),
               });
             }}
           >
@@ -251,6 +275,15 @@ export function LeadWorkspace(props: LeadWorkspaceProps) {
             <label className="text-sm">
               <span className="mb-1 block text-[var(--muted)]">When</span>
               <input name="scheduledAt" type="datetime-local" className={field} />
+            </label>
+            <label className="text-sm sm:col-span-2">
+              <span className="mb-1 block text-[var(--muted)]">Microsoft Teams meeting link</span>
+              <input
+                name="teamsMeetingUrl"
+                className={field}
+                defaultValue={teamsDefault}
+                placeholder="https://teams.microsoft.com/…"
+              />
             </label>
             <label className="text-sm sm:col-span-2">
               <span className="mb-1 block text-[var(--muted)]">Participants</span>
@@ -283,6 +316,7 @@ export function LeadWorkspace(props: LeadWorkspaceProps) {
                 scheduledAt: fd.get("scheduledAt") || undefined,
                 participants: fd.get("participants"),
                 nextAction: fd.get("nextAction"),
+                teamsMeetingUrl: fd.get("teamsMeetingUrl"),
               });
             }}
           >
@@ -292,7 +326,22 @@ export function LeadWorkspace(props: LeadWorkspaceProps) {
             </label>
             <label className="text-sm">
               <span className="mb-1 block text-[var(--muted)]">Next action</span>
-              <input name="nextAction" className={field} />
+              <select name="nextAction" className={field} defaultValue="follow-up">
+                {NEXT_ACTIONS.map((a) => (
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm sm:col-span-2">
+              <span className="mb-1 block text-[var(--muted)]">Microsoft Teams meeting link</span>
+              <input
+                name="teamsMeetingUrl"
+                className={field}
+                defaultValue={teamsDefault}
+                placeholder="https://teams.microsoft.com/…"
+              />
             </label>
             <label className="text-sm sm:col-span-2">
               <span className="mb-1 block text-[var(--muted)]">Participants</span>
@@ -310,81 +359,21 @@ export function LeadWorkspace(props: LeadWorkspaceProps) {
           </form>
         )}
 
-        {tab === "requirement" && (
-          <form
-            className="grid gap-3 sm:grid-cols-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const fd = new FormData(e.currentTarget);
-              void call("/api/requirements", {
-                leadId: props.leadId,
-                requirementType: fd.get("requirementType"),
-                description: fd.get("description"),
-                businessRequirement: fd.get("businessRequirement"),
-                technicalRequirement: fd.get("technicalRequirement"),
-                scope: fd.get("scope"),
-                timeline: fd.get("timeline"),
-                budget: fd.get("budget"),
-                decisionMaker: fd.get("decisionMaker"),
-              });
-            }}
-          >
-            <label className="text-sm">
-              <span className="mb-1 block text-[var(--muted)]">Type</span>
-              <input name="requirementType" className={field} placeholder="Functional / Security / …" />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-[var(--muted)]">Decision maker</span>
-              <input name="decisionMaker" className={field} />
-            </label>
-            <label className="text-sm sm:col-span-2">
-              <span className="mb-1 block text-[var(--muted)]">Description</span>
-              <textarea name="description" rows={2} className={field} />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-[var(--muted)]">Business need</span>
-              <input name="businessRequirement" className={field} />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-[var(--muted)]">Technical</span>
-              <input name="technicalRequirement" className={field} />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-[var(--muted)]">Scope</span>
-              <input name="scope" className={field} />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-[var(--muted)]">Timeline</span>
-              <input name="timeline" className={field} />
-            </label>
-            <label className="text-sm sm:col-span-2">
-              <span className="mb-1 block text-[var(--muted)]">Budget</span>
-              <input name="budget" className={field} />
-            </label>
-            <div className="sm:col-span-2">
-              <button
-                type="submit"
-                disabled={busy}
-                className="rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
-              >
-                Capture requirement
-              </button>
-            </div>
-          </form>
-        )}
-
         {tab === "request" && (
           <form
             className="grid gap-3 sm:grid-cols-2"
             onSubmit={(e) => {
               e.preventDefault();
               const fd = new FormData(e.currentTarget);
+              const followUpRaw = String(fd.get("followUpAfterDays") ?? "").trim();
               void call("/api/client-requests", {
                 leadId: props.leadId,
                 requestType: fd.get("requestType"),
                 title: fd.get("title"),
+                description: fd.get("description"),
                 notes: fd.get("notes"),
-                createFollowUp: fd.get("createFollowUp") === "on",
+                sendDate: fd.get("sendDate"),
+                followUpAfterDays: followUpRaw !== "" ? Number(followUpRaw) : undefined,
               });
             }}
           >
@@ -403,12 +392,28 @@ export function LeadWorkspace(props: LeadWorkspaceProps) {
               <input name="title" className={field} placeholder="Send proposal" />
             </label>
             <label className="text-sm sm:col-span-2">
+              <span className="mb-1 block text-[var(--muted)]">Description</span>
+              <textarea name="description" rows={2} className={field} />
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-[var(--muted)]">Sent / send-by date *</span>
+              <input name="sendDate" type="date" required className={field} />
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-[var(--muted)]">
+                Follow-up after (days) if no response
+              </span>
+              <input
+                name="followUpAfterDays"
+                type="number"
+                min={0}
+                className={field}
+                placeholder="Optional"
+              />
+            </label>
+            <label className="text-sm sm:col-span-2">
               <span className="mb-1 block text-[var(--muted)]">Notes</span>
               <textarea name="notes" rows={2} className={field} />
-            </label>
-            <label className="flex items-center gap-2 text-sm sm:col-span-2">
-              <input name="createFollowUp" type="checkbox" defaultChecked />
-              Auto-create follow-up (+3 days)
             </label>
             <div className="sm:col-span-2">
               <button
@@ -417,63 +422,6 @@ export function LeadWorkspace(props: LeadWorkspaceProps) {
                 className="rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
               >
                 Log client request
-              </button>
-            </div>
-          </form>
-        )}
-
-        {tab === "opportunity" && (
-          <form
-            className="grid gap-3 sm:grid-cols-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const fd = new FormData(e.currentTarget);
-              void call("/api/opportunities", {
-                leadId: props.leadId,
-                opportunityValue: fd.get("opportunityValue")
-                  ? Number(fd.get("opportunityValue"))
-                  : undefined,
-                probability: fd.get("probability")
-                  ? Number(fd.get("probability"))
-                  : undefined,
-                expectedClosureDate: fd.get("expectedClosureDate") || undefined,
-                negotiationStatus: fd.get("negotiationStatus"),
-                nextAction: fd.get("nextAction"),
-                notes: fd.get("notes"),
-              });
-            }}
-          >
-            <label className="text-sm">
-              <span className="mb-1 block text-[var(--muted)]">Value</span>
-              <input name="opportunityValue" type="number" className={field} />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-[var(--muted)]">Probability %</span>
-              <input name="probability" type="number" min={0} max={100} className={field} />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-[var(--muted)]">Expected close</span>
-              <input name="expectedClosureDate" type="date" className={field} />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-[var(--muted)]">Negotiation status</span>
-              <input name="negotiationStatus" className={field} />
-            </label>
-            <label className="text-sm sm:col-span-2">
-              <span className="mb-1 block text-[var(--muted)]">Next action</span>
-              <input name="nextAction" className={field} />
-            </label>
-            <label className="text-sm sm:col-span-2">
-              <span className="mb-1 block text-[var(--muted)]">Notes</span>
-              <textarea name="notes" rows={2} className={field} />
-            </label>
-            <div className="sm:col-span-2">
-              <button
-                type="submit"
-                disabled={busy}
-                className="rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
-              >
-                Create opportunity
               </button>
             </div>
           </form>
@@ -490,7 +438,6 @@ export function LeadWorkspace(props: LeadWorkspaceProps) {
                 {
                   action: "set_stage",
                   salesStage: fd.get("salesStage"),
-                  wonValue: fd.get("wonValue") ? Number(fd.get("wonValue")) : undefined,
                   lostReason: fd.get("lostReason"),
                   competitor: fd.get("competitor"),
                   notes: fd.get("notes"),
@@ -501,24 +448,29 @@ export function LeadWorkspace(props: LeadWorkspaceProps) {
           >
             <label className="text-sm">
               <span className="mb-1 block text-[var(--muted)]">Sales stage</span>
-              <select name="salesStage" className={field} defaultValue={props.salesStage}>
+              <select
+                name="salesStage"
+                className={field}
+                value={selectedStage}
+                onChange={(e) => setSelectedStage(e.target.value)}
+              >
                 {SALES_STAGES.map((s) => (
                   <option key={s}>{s}</option>
                 ))}
               </select>
             </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-[var(--muted)]">Won value (if Won)</span>
-              <input name="wonValue" type="number" className={field} />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-[var(--muted)]">Lost reason</span>
-              <input name="lostReason" className={field} />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-[var(--muted)]">Competitor</span>
-              <input name="competitor" className={field} />
-            </label>
+            {selectedStage === "Lost" ? (
+              <>
+                <label className="text-sm">
+                  <span className="mb-1 block text-[var(--muted)]">Lost reason</span>
+                  <input name="lostReason" className={field} />
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-[var(--muted)]">Competitor</span>
+                  <input name="competitor" className={field} />
+                </label>
+              </>
+            ) : null}
             <label className="text-sm sm:col-span-2">
               <span className="mb-1 block text-[var(--muted)]">Notes</span>
               <textarea name="notes" rows={2} className={field} />
@@ -545,7 +497,7 @@ export function LeadWorkspace(props: LeadWorkspaceProps) {
             empty="None yet"
             items={props.followUps.map((f) => ({
               id: f.id,
-              title: `FU #${f.followUpNumber}`,
+              title: followUpLabel(f.followUpNumber),
               meta: `${f.status}${f.dueAt ? ` · ${new Date(f.dueAt).toLocaleString()}` : ""}`,
               action:
                 f.status === "Pending" ? (
@@ -594,17 +546,7 @@ export function LeadWorkspace(props: LeadWorkspaceProps) {
             }))}
           />
         </Panel>
-        <Panel title="Requirements">
-          <HistoryList
-            empty="None yet"
-            items={props.requirements.map((r) => ({
-              id: r.id,
-              title: r.requirementType ?? "Requirement",
-              meta: r.description ?? r.status,
-            }))}
-          />
-        </Panel>
-        <Panel title="Client requests" className="lg:col-span-2">
+        <Panel title="Client requests">
           <ul className="space-y-2 text-sm">
             {props.clientRequests.length === 0 ? (
               <li className="text-[var(--muted)]">None yet</li>
@@ -654,23 +596,7 @@ export function LeadWorkspace(props: LeadWorkspaceProps) {
             )}
           </ul>
         </Panel>
-        <Panel title="Opportunities">
-          <HistoryList
-            empty="None yet"
-            items={props.opportunities.map((o) => ({
-              id: o.id,
-              title: o.salesStage,
-              meta: [
-                o.opportunityValue != null ? `₹${o.opportunityValue}` : null,
-                o.probability != null ? `${o.probability}%` : null,
-                o.negotiationStatus,
-              ]
-                .filter(Boolean)
-                .join(" · "),
-            }))}
-          />
-        </Panel>
-        <Panel title="Activity timeline">
+        <Panel title="Activity timeline" className="lg:col-span-2">
           <HistoryList
             empty="No activity yet"
             items={props.activities.map((a) => ({

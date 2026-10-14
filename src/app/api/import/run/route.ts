@@ -377,6 +377,16 @@ export async function POST(req: Request) {
             notes: notesParts.length ? notesParts.join(" · ") : null,
             nextAction,
             nextFollowUpAt,
+            outreachDate: outreachAt,
+            outreachChannel: mapped.outreachChannel || null,
+            outreachStatus: mapped.outreachStatus || null,
+            responseStatus: mapped.responseStatus || null,
+            lastReplyDate: parseMaybeDate(mapped.lastReplyDate ?? ""),
+            nextPhase: mapped.nextAction?.includes("meeting")
+              ? "Meeting"
+              : mapped.nextAction?.includes("demo")
+                ? "Demo"
+                : "Follow-up 1",
             createdAt: outreachAt,
           },
         });

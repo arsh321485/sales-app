@@ -116,7 +116,8 @@ Repeat for each product document you use often.
 | **Calendar** | Month view | Meetings and demos by date |
 | **Sales resources** | SharePoint catalog | Open linked proposal/pricing links by product |
 | **Documents** | File library | Upload a file or paste a SharePoint URL; optionally attach to a lead |
-| **Lead import** | Bulk Excel import | Upload `Sales_Pipeline_Tracker.xlsx` → Outreach sheet → auto column map → import leads |
+| **Outreach Import** | Bulk Excel import | Upload tracker Excel → Outreach sheet → map columns → import |
+| **Closure** | Won / Lost | Lead ID, contact, final outcome |
 | **Notifications** | Alerts | Assignments, follow-ups, meetings, requests. Opening this marks them read |
 
 ### Pages only Admin / Sales Manager see

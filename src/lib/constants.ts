@@ -13,6 +13,70 @@ export type SalesStage = (typeof SALES_STAGES)[number];
 
 export const TEMPERATURES = ["Hot", "Warm", "Cold"] as const;
 
+/** Next Action choices on lead / outreach */
+export const NEXT_ACTIONS = [
+  "follow-up",
+  "to schedule a meeting",
+  "demo",
+] as const;
+
+/** Next Phase on My Leads */
+export const NEXT_PHASES = [
+  "Follow-up 1",
+  "Follow-up 2",
+  "Meeting",
+  "Demo",
+] as const;
+
+export const OUTREACH_CHANNELS = [
+  "LinkedIn",
+  "Email",
+  "Call",
+  "WhatsApp",
+  "Event",
+  "Manual",
+  "Other",
+] as const;
+
+export const OUTREACH_STATUSES = [
+  "Connected",
+  "Replied",
+  "Pending",
+  "No Response",
+  "Other",
+] as const;
+
+export const RESPONSE_STATUSES = [
+  "Awaiting",
+  "Positive",
+  "Neutral",
+  "Negative",
+  "No Response",
+] as const;
+
+export const QUALIFICATION_STATUSES = [
+  "Pending",
+  "Qualified",
+  "Unqualified",
+] as const;
+
+/** Display label for follow-up sequence: Follow-up, Follow-up 1, Follow-up 2 */
+export function followUpLabel(followUpNumber: number) {
+  if (followUpNumber <= 1) return "Follow-up";
+  if (followUpNumber === 2) return "Follow-up 1";
+  if (followUpNumber === 3) return "Follow-up 2";
+  return `Follow-up ${followUpNumber - 1}`;
+}
+
+/** Default Microsoft Teams meeting link (override with TEAMS_MEETING_URL in .env) */
+export function defaultTeamsMeetingUrl() {
+  return (
+    process.env.NEXT_PUBLIC_TEAMS_MEETING_URL ||
+    process.env.TEAMS_MEETING_URL ||
+    "https://teams.microsoft.com/l/meetup-join/"
+  );
+}
+
 export const ROLES = [
   "SuperAdmin",
   "SalesManager",

@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { leadScopeWhere } from "@/lib/scope";
-import { Badge, PageHeader, Panel } from "@/components/ui";
+import { PageHeader, Panel } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -11,34 +11,64 @@ export default async function MeetingsPage() {
   const user = await requireUser();
   const rows = await prisma.meeting.findMany({
     where: { lead: { isDeleted: false, ...leadScopeWhere(user) } },
-    include: { lead: { include: { organization: true } } },
+    include: {
+      lead: {
+        include: { organization: true, contact: true, owner: true },
+      },
+    },
     orderBy: { scheduledAt: "desc" },
     take: 100,
   });
 
   return (
     <div>
-      <PageHeader title="Meetings" description="Discovery and commercial meetings logged on leads." />
+      <PageHeader
+        title="Meetings"
+        description="Discovery and commercial meetings logged on leads."
+      />
       <Panel>
-        <ul className="divide-y divide-[var(--border)] text-sm">
-          {rows.map((m) => (
-            <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
-              <div>
-                <Link href={`/leads/${m.leadId}`} className="font-medium hover:text-[var(--accent)]">
-                  {m.lead.organization.orgName}
-                </Link>
-                <p className="text-xs text-[var(--muted)]">
-                  {m.meetingType ?? "Meeting"}
-                  {m.scheduledAt ? ` · ${format(m.scheduledAt, "dd MMM yyyy HH:mm")}` : ""}
-                </p>
-              </div>
-              <Badge>{m.status}</Badge>
-            </li>
-          ))}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wider text-[var(--muted)]">
+              <tr>
+                <th className="pb-2 pr-3 font-medium">Lead ID</th>
+                <th className="pb-2 pr-3 font-medium">Company</th>
+                <th className="pb-2 pr-3 font-medium">Contact Name</th>
+                <th className="pb-2 pr-3 font-medium">Meeting Date</th>
+                <th className="pb-2 font-medium">Owner</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border)]">
+              {rows.map((m) => (
+                <tr key={m.id} className="align-top">
+                  <td className="py-3 pr-3">
+                    <Link
+                      href={`/leads/${m.leadId}`}
+                      className="font-medium hover:text-[var(--accent)]"
+                    >
+                      {m.lead.leadCode}
+                    </Link>
+                  </td>
+                  <td className="py-3 pr-3">{m.lead.organization.orgName}</td>
+                  <td className="py-3 pr-3">
+                    {m.lead.contact?.fullName ?? "—"}
+                  </td>
+                  <td className="py-3 pr-3 whitespace-nowrap">
+                    {m.scheduledAt
+                      ? format(m.scheduledAt, "dd MMM yyyy HH:mm")
+                      : "—"}
+                  </td>
+                  <td className="py-3">{m.lead.owner?.name ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
           {rows.length === 0 ? (
-            <li className="py-8 text-center text-[var(--muted)]">No meetings yet.</li>
+            <p className="py-8 text-center text-sm text-[var(--muted)]">
+              No meetings yet.
+            </p>
           ) : null}
-        </ul>
+        </div>
       </Panel>
     </div>
   );

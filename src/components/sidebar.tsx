@@ -41,11 +41,11 @@ const salesNav = [
   { href: "/demos", label: "Demos", icon: Presentation },
   { href: "/requirements", label: "Requirements", icon: FileText },
   { href: "/requests", label: "Client requests", icon: Inbox },
-  { href: "/opportunities", label: "Opportunities", icon: Target },
+  { href: "/closure", label: "Closure", icon: Target },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/resources", label: "Sales resources", icon: Link2 },
   { href: "/documents", label: "Documents", icon: FolderOpen },
-  { href: "/import", label: "Lead import", icon: Upload },
+  { href: "/import", label: "Outreach Import", icon: Upload },
   { href: "/notifications", label: "Notifications", icon: Bell },
 ];
 

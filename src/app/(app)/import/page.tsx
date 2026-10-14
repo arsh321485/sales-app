@@ -15,7 +15,7 @@ export default async function ImportPage() {
   return (
     <div>
       <PageHeader
-        title="Lead import"
+        title="Outreach Import"
         description="Bulk-import from Sales_Pipeline_Tracker.xlsx — Outreach sheet. Columns auto-map to Lead ID, Product, Company, Contact, and the rest."
       />
       <OutreachImportPanel

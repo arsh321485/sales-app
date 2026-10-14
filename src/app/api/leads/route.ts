@@ -27,14 +27,11 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const orgName = String(body.orgName ?? "").trim();
+    const orgName = String(body.orgName ?? "").trim() || "Unknown company";
     const productId = String(body.productId ?? "");
-    const contactName = String(body.contactName ?? "").trim();
-    if (!orgName || !productId || !contactName) {
-      return NextResponse.json(
-        { error: "Company, product and contact name are required" },
-        { status: 400 },
-      );
+    const contactName = String(body.contactName ?? "").trim() || "Unknown contact";
+    if (!productId) {
+      return NextResponse.json({ error: "Product is required" }, { status: 400 });
     }
 
     const product = await prisma.product.findFirst({
@@ -45,20 +42,38 @@ export async function POST(req: Request) {
     }
 
     let ownerId = user.id;
-    if (isManagerRole(user.role) && body.ownerId) {
+    if (body.ownerId && (isManagerRole(user.role) || String(body.ownerId) === user.id)) {
       ownerId = String(body.ownerId);
     }
 
-    const leadCode = await nextLeadCode(productId);
+    const leadCode =
+      String(body.leadCode ?? "").trim() || (await nextLeadCode(productId));
+    if (body.leadCode) {
+      const exists = await prisma.lead.findFirst({ where: { leadCode } });
+      if (exists) {
+        return NextResponse.json({ error: `Lead ID ${leadCode} already exists` }, { status: 409 });
+      }
+    }
+
+    const geography = String(body.geography ?? "").trim();
+    const location = String(body.location ?? body.city ?? "").trim();
+    const country = geography
+      ? geography.split("/")[0]?.trim() || geography
+      : String(body.country ?? "India").trim() || "India";
+
+    const outreachDate = body.outreachDate
+      ? new Date(String(body.outreachDate))
+      : new Date();
 
     const org = await prisma.organization.create({
       data: {
         orgName,
         industry: String(body.industry ?? "").trim() || null,
-        city: String(body.city ?? "").trim() || null,
+        city: location.split(",")[0]?.trim() || location || null,
         state: String(body.state ?? "").trim() || null,
+        country,
         websiteDomain: String(body.websiteDomain ?? "").trim() || null,
-        notes: String(body.notes ?? "").trim() || null,
+        notes: location || null,
       },
     });
 
@@ -67,8 +82,8 @@ export async function POST(req: Request) {
         organizationId: org.id,
         fullName: contactName,
         designation: String(body.designation ?? "").trim() || null,
-        email: String(body.contactEmail ?? "").trim() || null,
-        phone: String(body.contactPhone ?? "").trim() || null,
+        email: String(body.contactEmail ?? body.email ?? "").trim() || null,
+        phone: String(body.contactPhone ?? body.phone ?? "").trim() || null,
         linkedinUrl: String(body.linkedinUrl ?? "").trim() || null,
       },
     });
@@ -80,12 +95,22 @@ export async function POST(req: Request) {
         productId,
         contactId: contact.id,
         ownerId,
-        salesStage: "New",
-        source: String(body.source ?? "Manual").trim() || "Manual",
+        salesStage: String(body.salesStage ?? body.pipelineStatus ?? "New").trim() || "New",
+        temperature: String(body.temperature ?? "").trim() || null,
+        qualification: String(body.qualification ?? "").trim() || null,
+        source: String(body.source ?? body.outreachChannel ?? "Manual").trim() || "Manual",
         campaign: String(body.campaign ?? "").trim() || null,
-        nextAction: String(body.nextAction ?? "Qualify lead").trim(),
-        nextFollowUpAt: body.nextFollowUpAt
-          ? new Date(String(body.nextFollowUpAt))
+        nextAction: String(body.nextAction ?? "follow-up").trim() || "follow-up",
+        nextFollowUpAt: body.nextFollowUpAt || body.nextActionDate
+          ? new Date(String(body.nextFollowUpAt ?? body.nextActionDate))
+          : null,
+        nextPhase: String(body.nextPhase ?? "").trim() || null,
+        outreachDate,
+        outreachChannel: String(body.outreachChannel ?? "").trim() || null,
+        outreachStatus: String(body.outreachStatus ?? "").trim() || null,
+        responseStatus: String(body.responseStatus ?? "").trim() || null,
+        lastReplyDate: body.lastReplyDate
+          ? new Date(String(body.lastReplyDate))
           : null,
         notes: String(body.notes ?? "").trim() || null,
       },
@@ -97,6 +122,7 @@ export async function POST(req: Request) {
       activityType: "Outreach",
       title: `Outreach created — ${leadCode}`,
       detail: `Channel: ${body.outreachChannel ?? "Manual"}`,
+      occurredAt: outreachDate,
     });
 
     if (ownerId !== user.id) {

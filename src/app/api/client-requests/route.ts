@@ -22,8 +22,22 @@ export async function POST(req: Request) {
 
   const requestType = String(body.requestType ?? "proposal");
   const title = String(body.title ?? `${requestType} request`).trim();
+  const sendDateRaw = body.sendDate ?? body.dueAt;
+  if (!sendDateRaw) {
+    return NextResponse.json(
+      { error: "Send date is required (when document was/needs to be sent)" },
+      { status: 400 },
+    );
+  }
+  const sendDate = new Date(String(sendDateRaw));
+  const followUpAfterDays =
+    body.followUpAfterDays != null && String(body.followUpAfterDays) !== ""
+      ? Number(body.followUpAfterDays)
+      : null;
+  if (followUpAfterDays != null && (Number.isNaN(followUpAfterDays) || followUpAfterDays < 0)) {
+    return NextResponse.json({ error: "Follow-up days must be a number ≥ 0" }, { status: 400 });
+  }
 
-  // Match SharePoint resource by product + request type
   const resourceTypeMap: Record<string, string> = {
     proposal: "Proposal",
     pricing: "Pricing",
@@ -49,11 +63,14 @@ export async function POST(req: Request) {
       ownerId: lead.ownerId ?? user.id,
       requestType,
       title,
+      description: String(body.description ?? "").trim() || null,
       status: "Open",
       priority: "High",
       resourceId,
+      sendDate,
+      dueAt: sendDate,
+      followUpAfterDays,
       notes: String(body.notes ?? "").trim() || null,
-      dueAt: body.dueAt ? new Date(String(body.dueAt)) : null,
     },
     include: { resource: true },
   });
@@ -63,6 +80,7 @@ export async function POST(req: Request) {
     userId: user.id,
     activityType: "ClientRequest",
     title: `Client requested: ${title}`,
+    detail: body.description ? String(body.description) : null,
   });
 
   if (lead.ownerId) {
@@ -78,17 +96,17 @@ export async function POST(req: Request) {
     });
   }
 
-  // Optional auto follow-up
-  if (body.createFollowUp) {
+  if (followUpAfterDays != null && followUpAfterDays > 0) {
     const count = await prisma.followUp.count({ where: { leadId } });
     await prisma.followUp.create({
       data: {
         leadId,
         followUpNumber: count + 1,
         ownerId: lead.ownerId ?? user.id,
-        dueAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+        dueAt: new Date(sendDate.getTime() + followUpAfterDays * 24 * 60 * 60 * 1000),
         status: "Pending",
-        notes: `Follow up on ${title}`,
+        notes: `Follow up on ${title} if no response (${followUpAfterDays} days)`,
+        nextAction: "follow-up",
       },
     });
   }
@@ -116,6 +134,7 @@ export async function PATCH(req: Request) {
         status: "Sent",
         sentAt: new Date(),
         sentById: user.id,
+        sendDate: cr.sendDate ?? new Date(),
       },
       include: { resource: true },
     });
@@ -128,18 +147,21 @@ export async function PATCH(req: Request) {
       detail: cr.resource?.sharePointUrl ?? null,
     });
 
-    // Auto follow-up after send
-    const count = await prisma.followUp.count({ where: { leadId: cr.leadId } });
-    await prisma.followUp.create({
-      data: {
-        leadId: cr.leadId,
-        followUpNumber: count + 1,
-        ownerId: cr.ownerId ?? user.id,
-        dueAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-        status: "Pending",
-        notes: `Follow up after sending ${cr.title}`,
-      },
-    });
+    const days = cr.followUpAfterDays ?? 2;
+    if (days > 0) {
+      const count = await prisma.followUp.count({ where: { leadId: cr.leadId } });
+      await prisma.followUp.create({
+        data: {
+          leadId: cr.leadId,
+          followUpNumber: count + 1,
+          ownerId: cr.ownerId ?? user.id,
+          dueAt: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
+          status: "Pending",
+          notes: `Follow up after sending ${cr.title}`,
+          nextAction: "follow-up",
+        },
+      });
+    }
 
     return NextResponse.json(updated);
   }
@@ -149,6 +171,13 @@ export async function PATCH(req: Request) {
     data: {
       status: body.status != null ? String(body.status) : cr.status,
       notes: body.notes != null ? String(body.notes) : cr.notes,
+      description:
+        body.description != null ? String(body.description) : cr.description,
+      sendDate: body.sendDate ? new Date(String(body.sendDate)) : cr.sendDate,
+      followUpAfterDays:
+        body.followUpAfterDays != null
+          ? Number(body.followUpAfterDays)
+          : cr.followUpAfterDays,
     },
   });
   return NextResponse.json(updated);

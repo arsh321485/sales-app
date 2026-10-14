@@ -93,12 +93,12 @@ export async function PATCH(
     const salesStage = String(body.salesStage);
     const data: Record<string, unknown> = { salesStage };
     if (salesStage === "Won") {
-      data.wonValue = body.wonValue != null ? Number(body.wonValue) : lead.wonValue;
       data.closedAt = body.closedAt ? new Date(String(body.closedAt)) : new Date();
       data.status = "Closed";
+      data.lostReason = null;
     }
     if (salesStage === "Lost") {
-      data.lostReason = String(body.lostReason ?? "");
+      data.lostReason = String(body.lostReason ?? "").trim() || "Not specified";
       data.competitor = String(body.competitor ?? "") || null;
       data.closedAt = new Date();
       data.status = "Closed";
@@ -152,12 +152,19 @@ export async function PATCH(
         painPoint: body.painPoint != null ? String(body.painPoint) : undefined,
         notes: body.notes != null ? String(body.notes) : undefined,
         nextAction: body.nextAction != null ? String(body.nextAction) : undefined,
+        nextPhase: body.nextPhase != null ? String(body.nextPhase) || null : undefined,
         nextFollowUpAt: body.nextFollowUpAt
           ? new Date(String(body.nextFollowUpAt))
           : body.nextFollowUpAt === null
             ? null
             : undefined,
         campaign: body.campaign != null ? String(body.campaign) || null : undefined,
+        outreachStatus:
+          body.outreachStatus != null ? String(body.outreachStatus) || null : undefined,
+        responseStatus:
+          body.responseStatus != null ? String(body.responseStatus) || null : undefined,
+        outreachChannel:
+          body.outreachChannel != null ? String(body.outreachChannel) || null : undefined,
       },
     });
     return NextResponse.json(updated);
