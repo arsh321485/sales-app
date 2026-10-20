@@ -54,11 +54,34 @@ model Product {
 model Organization {
   id            String   @id @default(auto()) @map("_id") @db.ObjectId
   orgName       String
+  tradingName   String?
   websiteDomain String?
+  linkedinCompanyUrl String?
   industry      String?
+  subIndustry   String?
   city          String?
   state         String?
   country       String   @default("India")
+  hqStreet      String?
+  operatingCountries String?
+  companyType   String?
+  legalForm     String?
+  parentOrganizationId String? @db.ObjectId
+  parentName    String?
+  description   String?
+  businessModel String?
+  productsServices String?
+  targetCustomers String?
+  mainMarkets   String?
+  employeeCount Int?
+  employeeRange String?
+  businessStage String?
+  publicPhone   String?
+  foundedYear   Int?
+  registrationNumber String?
+  registrySource String?
+  researchStatus String  @default("Draft")
+  lastVerifiedAt DateTime?
   notes         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -66,8 +89,11 @@ model Organization {
 
   contacts Contact[]
   leads    Lead[]
+  researchJobs ResearchJob[]
 
   @@index([orgName])
+  @@index([websiteDomain])
+  @@index([researchStatus])
 }
 
 model Contact {
@@ -76,9 +102,19 @@ model Contact {
   organization   Organization @relation(fields: [organizationId], references: [id])
   fullName       String
   designation    String?
+  department     String?
+  seniority      String?
+  contactCity    String?
+  contactCountry String?
   email          String?
+  emailVerificationStatus String?
+  emailVerifiedAt DateTime?
+  emailOrigin    String?
   phone          String?
   linkedinUrl    String?
+  sourceUrl      String?
+  lastSeenAt     DateTime?
+  isCurrent      Boolean      @default(true)
   isPrimary      Boolean      @default(true)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -384,4 +420,79 @@ model ImportLog {
   errorCount      Int      @default(0)
   errorSummary    String?
   createdAt       DateTime @default(now())
+}
+
+model FieldClaim {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  entityType  String
+  entityId    String   @db.ObjectId
+  field       String
+  value       String?
+  sourceName  String
+  sourceUrl   String?
+  retrievedAt DateTime @default(now())
+  method      String
+  confidence  Float
+  modelVersion String?
+  createdById String?  @db.ObjectId
+  createdAt   DateTime @default(now())
+  @@index([entityType, entityId])
+  @@index([field])
+}
+
+model ResearchSource {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  name          String   @unique
+  category      String
+  fieldsSupplied String?
+  licence       String?
+  allowedUses   String?
+  personalData  Boolean  @default(false)
+  refreshCadence String?
+  isActive      Boolean  @default(true)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Suppression {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  email        String?
+  emailHash    String?  @unique
+  nameDomainKey String?
+  reason       String
+  jurisdiction String?
+  createdById  String?  @db.ObjectId
+  createdAt    DateTime @default(now())
+  @@index([email])
+}
+
+model PrivacyEvent {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  contactId   String?   @db.ObjectId
+  personEmail String?
+  eventType   String
+  status      String    @default("Open")
+  receivedAt  DateTime  @default(now())
+  completedAt DateTime?
+  handlerId   String?   @db.ObjectId
+  notes       String?
+  createdAt   DateTime  @default(now())
+  @@index([status])
+}
+
+model ResearchJob {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String?   @db.ObjectId
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  jobType        String
+  status         String    @default("Queued")
+  summary        String?
+  error          String?
+  createdById    String?   @db.ObjectId
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  @@index([organizationId])
+  @@index([status])
 }

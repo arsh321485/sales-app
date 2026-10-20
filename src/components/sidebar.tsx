@@ -21,6 +21,9 @@ import {
   Link2,
   Upload,
   Banknote,
+  Search,
+  Database,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/constants";
 
@@ -34,6 +37,9 @@ type NavUser = {
 
 const salesNav = [
   { href: "/", label: "My Work", icon: ClipboardList },
+  { href: "/research", label: "Research", icon: Search },
+  { href: "/research/sources", label: "Research Sources", icon: Database },
+  { href: "/research/privacy", label: "Privacy & Suppression", icon: Shield },
   { href: "/leads/new", label: "New outreach", icon: PlusCircle },
   { href: "/leads", label: "Leads", icon: Users },
   { href: "/follow-ups", label: "Follow-ups", icon: Inbox },

@@ -244,6 +244,22 @@ Then log in again as `admin@company.com` / `Admin@12345` and repeat Section 2 (p
 
 ---
 
+## 10. Organization Research (implemented from Go-to-Production Plan)
+
+Use **Research** in the sidebar to build trusted company + decision-maker profiles before outreach.
+
+1. **Research** (`/research`) — search companies, see the 17 company fields coverage, status (Draft / Needs review / Published / Stale).
+2. **New Research Org** (`/research/new`) — add a company manually. Every saved value records a **FieldClaim** (source, URL, date, method, confidence) — see Provenance on the detail page.
+3. **Enrich from website** — on the company page, click Enrich. The app fetches the official website (description, LinkedIn company, phone, published emails) and only publishes values with confidence ≥ 0.8; the rest stays as claims for review.
+4. **Contacts** — add decision-makers on the company page. Department + seniority are auto-classified from title. Personal emails are blocked; suppressed people cannot be added. Use **Verify email** (syntax + MX; `Valid` needs an SMTP probe, so MX-only shows `Unknown`).
+5. **Convert to Lead** — pick a product on a contact row → creates an Outreach Lead (source = Research) for the logged-in user (manager can assign). Then work it in My Leads as usual.
+6. **Research Sources** (`/research/sources`) — licensing register (built-in registry/GLEIF/Wikidata/website/feed list; managers can add their own sources).
+7. **Privacy & Suppression** (`/research/privacy`) — add opt-out / erasure suppressions and log privacy events (Notice / Objection / Access / Erasure / Correction). Erasure/Objection auto-suppresses the email.
+
+Not in this in-app version: bulk registry crawlers, GPU LLM farms, and licensed feed contracts — those remain external pipelines that should feed this app via its Research APIs (`/api/research/*`).
+
+---
+
 ## 9. Quick checklist for a brand-new company
 
 - [ ] `npm run dev` and open login  
