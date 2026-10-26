@@ -24,6 +24,7 @@ export function OutreachImportPanel({
   products: { id: string; name: string; code: string }[];
 }) {
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewPayload | null>(null);
   const [mapping, setMapping] = useState<Record<string, ImportFieldKey | "">>({});
@@ -38,6 +39,8 @@ export function OutreachImportPanel({
     productsCreated?: string[];
     message?: string;
   } | null>(null);
+
+  const CHUNK = 40;
 
   const mappedHints = useMemo(() => {
     const values = Object.values(mapping);
@@ -93,23 +96,93 @@ export function OutreachImportPanel({
     setBusy(true);
     setError(null);
     setResult(null);
-    const res = await fetch("/api/import/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        fileName: preview.fileName,
-        rows: preview.rows,
-        mapping,
-        skipDuplicates,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    setBusy(false);
-    if (!res.ok) {
-      setError(data.error ?? "Import failed");
-      return;
+    setProgress(null);
+
+    const allRows = preview.rows;
+    const total = allRows.length;
+    const chunks = Math.ceil(total / CHUNK) || 1;
+
+    const aggregate = {
+      success: 0,
+      skipped: 0,
+      skippedEmpty: 0,
+      skippedDuplicate: 0,
+      errors: 0,
+      errorLines: [] as string[],
+      productsCreated: [] as string[],
+      message: undefined as string | undefined,
+    };
+
+    try {
+      for (let c = 0; c < chunks; c++) {
+        const start = c * CHUNK;
+        const slice = allRows.slice(start, start + CHUNK);
+        setProgress(`Importing rows ${start + 1}–${start + slice.length} of ${total}…`);
+
+        const res = await fetch("/api/import/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: preview.fileName,
+            rows: slice,
+            rowOffset: start,
+            mapping,
+            skipDuplicates,
+          }),
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setError(
+            typeof data.error === "string"
+              ? data.error
+              : `Import failed on batch ${c + 1}/${chunks} (HTTP ${res.status})`,
+          );
+          if (aggregate.success > 0 || aggregate.skipped > 0) {
+            setResult(aggregate);
+          }
+          setBusy(false);
+          setProgress(null);
+          return;
+        }
+
+        aggregate.success += Number(data.success) || 0;
+        aggregate.skipped += Number(data.skipped) || 0;
+        aggregate.skippedEmpty += Number(data.skippedEmpty) || 0;
+        aggregate.skippedDuplicate += Number(data.skippedDuplicate) || 0;
+        aggregate.errors += Number(data.errors) || 0;
+        if (Array.isArray(data.errorLines)) {
+          aggregate.errorLines.push(...data.errorLines);
+        }
+        if (Array.isArray(data.productsCreated)) {
+          aggregate.productsCreated.push(...data.productsCreated);
+        }
+        if (data.message) aggregate.message = data.message;
+      }
+
+      aggregate.productsCreated = [...new Set(aggregate.productsCreated)];
+      aggregate.errorLines = aggregate.errorLines.slice(0, 50);
+      if (
+        !aggregate.message &&
+        aggregate.success === 0 &&
+        aggregate.skippedDuplicate > 0
+      ) {
+        aggregate.message = `No new leads. ${aggregate.skippedDuplicate} already imported (same Lead ID). ${aggregate.skippedEmpty} blank Excel rows ignored.`;
+      }
+      setResult(aggregate);
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Import failed (network or timeout). Try again — already-imported Lead IDs will be skipped.",
+      );
+      if (aggregate.success > 0 || aggregate.skipped > 0) {
+        setResult(aggregate);
+      }
+    } finally {
+      setBusy(false);
+      setProgress(null);
     }
-    setResult(data);
   }
 
   return (
@@ -281,13 +354,18 @@ export function OutreachImportPanel({
             onClick={() => void runImport()}
             className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
           >
-            {busy ? "Importing…" : `Import ${preview.rows.length} rows`}
+            {busy
+              ? progress ?? "Importing…"
+              : `Import ${preview.rows.length} rows`}
           </button>
+          {progress ? (
+            <p className="mt-2 text-xs text-[var(--accent)]">{progress}</p>
+          ) : null}
           <p className="mt-2 text-xs text-[var(--muted)]">
             Creates Organization + Contact + Lead per row. Lead IDs from Excel are
             kept when present; otherwise the next product ID (VF001…) is generated.
             Missing Company/Contact is OK. Products are auto-created when needed
-            (VaptFix, GRCMentor, …).
+            (VaptFix, GRCMentor, …). Large files import in batches of {CHUNK}.
           </p>
         </Panel>
       ) : null}

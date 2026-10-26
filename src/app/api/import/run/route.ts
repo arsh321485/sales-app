@@ -42,9 +42,15 @@ function parseLocation(location: string | undefined, geography: string | undefin
   const city = location?.split(",")[0]?.trim() || null;
   let country = "India";
   if (geography) {
-    country = geography.split("/")[0]?.trim() || geography;
+    country = geography.split("/")[0]?.trim() || geography.trim() || "India";
   }
+  if (!country) country = "India";
   return { city, country };
+}
+
+function safeDate(d: Date | null | undefined): Date | null {
+  if (!d) return null;
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 function bumpProductCounter(prefix: string, code: string, currentNext: number) {
@@ -167,6 +173,8 @@ async function resolveProduct(
   }
 }
 
+export const maxDuration = 300;
+
 export async function POST(req: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -174,6 +182,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const fileName = String(body.fileName ?? "outreach.xlsx");
+    const rowOffset = Math.max(0, Number(body.rowOffset) || 0);
     const rows = Array.isArray(body.rows) ? (body.rows as Record<string, string>[]) : [];
     const mapping = (body.mapping ?? {}) as Record<string, string>;
     const skipDuplicates = body.skipDuplicates !== false;
@@ -185,6 +194,14 @@ export async function POST(req: Request) {
 
     if (!rows.length) {
       return NextResponse.json({ error: "No rows to import" }, { status: 400 });
+    }
+
+    // Keep each request short — client sends chunks
+    if (rows.length > 60) {
+      return NextResponse.json(
+        { error: "Send at most 60 rows per request (use chunked import)." },
+        { status: 400 },
+      );
     }
 
     const [products, users] = await Promise.all([
@@ -201,6 +218,20 @@ export async function POST(req: Request) {
       indexProduct(productByKey, p);
     }
 
+    const codesInBatch = new Set<string>();
+    for (const row of rows) {
+      const mapped = applyMapping(row, mapping);
+      const code = mapped.leadCode?.trim();
+      if (code) codesInBatch.add(code);
+    }
+    const existingCodes =
+      codesInBatch.size > 0
+        ? await prisma.lead.findMany({
+            where: { leadCode: { in: [...codesInBatch] } },
+            select: { leadCode: true },
+          })
+        : [];
+    const knownLeadCodes = new Set(existingCodes.map((l) => l.leadCode));
     const userByName = new Map(
       users.map((u) => [u.name.trim().toLowerCase(), u]),
     );
@@ -215,6 +246,7 @@ export async function POST(req: Request) {
     const nextBump = new Map<string, number>();
 
     for (let i = 0; i < rows.length; i++) {
+      const rowLabel = rowOffset + i + 1;
       const mapped = applyMapping(rows[i], mapping);
       let orgName = mapped.orgName?.trim() ?? "";
       let contactName = mapped.contactName?.trim() ?? "";
@@ -238,7 +270,7 @@ export async function POST(req: Request) {
 
       // Company / Contact optional — use placeholders when blank
       if (!orgName) orgName = contactName || leadCodeHint || "Unknown company";
-      if (!contactName) contactName = orgName !== "Unknown company" ? "Unknown contact" : "Unknown contact";
+      if (!contactName) contactName = "Unknown contact";
 
       // Product optional if Lead ID prefix can resolve it (VF001 → VaptFix)
       if (!productRaw && leadCodeHint) {
@@ -253,10 +285,18 @@ export async function POST(req: Request) {
       }
 
       const beforeKeys = productByKey.size;
-      const product = await resolveProduct(productRaw, leadCodeHint, productByKey);
+      let product: ProductRow | null = null;
+      try {
+        product = await resolveProduct(productRaw, leadCodeHint, productByKey);
+      } catch (err) {
+        console.error(err);
+        errors++;
+        errorLines.push(`Row ${rowLabel}: product resolve failed for "${productRaw}"`);
+        continue;
+      }
       if (!product) {
         errors++;
-        errorLines.push(`Row ${i + 1}: could not resolve product "${productRaw}"`);
+        errorLines.push(`Row ${rowLabel}: could not resolve product "${productRaw}"`);
         continue;
       }
       if (productByKey.size > beforeKeys) {
@@ -265,31 +305,41 @@ export async function POST(req: Request) {
 
       let leadCode = leadCodeHint;
       if (leadCode) {
-        const exists = await prisma.lead.findFirst({ where: { leadCode } });
-        if (exists) {
+        if (knownLeadCodes.has(leadCode)) {
           if (skipDuplicates) {
             skipped++;
             skippedDuplicate++;
             continue;
           }
           errors++;
-          errorLines.push(`Row ${i + 1}: Lead ID ${leadCode} already exists`);
+          errorLines.push(`Row ${rowLabel}: Lead ID ${leadCode} already exists`);
           continue;
         }
       } else {
-        const current =
-          nextBump.get(product.id) ??
-          (
-            await prisma.product.findUniqueOrThrow({ where: { id: product.id } })
-          ).nextNumber;
-        leadCode = `${product.prefix}${String(current).padStart(3, "0")}`;
-        nextBump.set(product.id, current + 1);
-        const clash = await prisma.lead.findFirst({ where: { leadCode } });
-        if (clash) {
+        let current = nextBump.get(product.id) ?? product.nextNumber;
+        // Skip ahead if generated code already exists in DB
+        for (let guard = 0; guard < 50; guard++) {
+          const candidate = `${product.prefix}${String(current).padStart(3, "0")}`;
+          if (knownLeadCodes.has(candidate)) {
+            current++;
+            continue;
+          }
+          const clash = await prisma.lead.findFirst({
+            where: { leadCode: candidate },
+            select: { id: true },
+          });
+          if (clash) {
+            knownLeadCodes.add(candidate);
+            current++;
+            continue;
+          }
+          leadCode = candidate;
+          nextBump.set(product.id, current + 1);
+          break;
+        }
+        if (!leadCode) {
           errors++;
-          errorLines.push(
-            `Row ${i + 1}: generated Lead ID ${leadCode} already exists`,
-          );
+          errorLines.push(`Row ${rowLabel}: could not allocate Lead ID`);
           continue;
         }
       }
@@ -332,33 +382,34 @@ export async function POST(req: Request) {
         "Excel import";
       const nextAction =
         mapped.nextAction?.trim() || "Review imported outreach";
-      const nextFollowUpAt = parseMaybeDate(mapped.nextFollowUpAt ?? "");
+      const nextFollowUpAt = safeDate(parseMaybeDate(mapped.nextFollowUpAt ?? ""));
       const leadStatus = mapped.leadStatus?.trim() || "Open";
+      const outreachAt =
+        safeDate(parseMaybeDate(mapped.outreachDate ?? "")) ?? new Date();
+      const lastReplyDate = safeDate(parseMaybeDate(mapped.lastReplyDate ?? ""));
 
       try {
         const org = await prisma.organization.create({
           data: {
-            orgName,
-            websiteDomain: mapped.websiteDomain || null,
-            industry: mapped.industry || null,
-            city,
-            country,
-            notes: mapped.location || null,
+            orgName: orgName.slice(0, 500),
+            websiteDomain: mapped.websiteDomain?.slice(0, 300) || null,
+            industry: mapped.industry?.slice(0, 200) || null,
+            city: city?.slice(0, 120) || null,
+            country: country.slice(0, 120),
+            notes: mapped.location?.slice(0, 2000) || null,
           },
         });
 
         const contact = await prisma.contact.create({
           data: {
             organizationId: org.id,
-            fullName: contactName,
-            designation: mapped.designation || null,
-            email: mapped.email || null,
-            phone: mapped.phone || null,
-            linkedinUrl: mapped.linkedinUrl || null,
+            fullName: contactName.slice(0, 200),
+            designation: mapped.designation?.slice(0, 200) || null,
+            email: mapped.email?.slice(0, 200) || null,
+            phone: mapped.phone?.slice(0, 80) || null,
+            linkedinUrl: mapped.linkedinUrl?.slice(0, 500) || null,
           },
         });
-
-        const outreachAt = parseMaybeDate(mapped.outreachDate ?? "") ?? new Date();
 
         const lead = await prisma.lead.create({
           data: {
@@ -370,26 +421,28 @@ export async function POST(req: Request) {
             salesStage,
             temperature,
             qualification,
-            source,
-            campaign: mapped.campaign || null,
-            painPoint: mapped.painPoint || null,
-            status: leadStatus,
-            notes: notesParts.length ? notesParts.join(" · ") : null,
-            nextAction,
+            source: source.slice(0, 200),
+            campaign: mapped.campaign?.slice(0, 200) || null,
+            painPoint: mapped.painPoint?.slice(0, 2000) || null,
+            status: leadStatus.slice(0, 80),
+            notes: notesParts.length ? notesParts.join(" · ").slice(0, 4000) : null,
+            nextAction: nextAction.slice(0, 500),
             nextFollowUpAt,
             outreachDate: outreachAt,
-            outreachChannel: mapped.outreachChannel || null,
-            outreachStatus: mapped.outreachStatus || null,
-            responseStatus: mapped.responseStatus || null,
-            lastReplyDate: parseMaybeDate(mapped.lastReplyDate ?? ""),
-            nextPhase: mapped.nextAction?.includes("meeting")
+            outreachChannel: mapped.outreachChannel?.slice(0, 120) || null,
+            outreachStatus: mapped.outreachStatus?.slice(0, 200) || null,
+            responseStatus: mapped.responseStatus?.slice(0, 200) || null,
+            lastReplyDate,
+            nextPhase: /meeting/i.test(mapped.nextAction ?? "")
               ? "Meeting"
-              : mapped.nextAction?.includes("demo")
+              : /demo/i.test(mapped.nextAction ?? "")
                 ? "Demo"
                 : "Follow-up 1",
             createdAt: outreachAt,
           },
         });
+
+        knownLeadCodes.add(leadCode);
 
         await logActivity({
           leadId: lead.id,
@@ -414,8 +467,10 @@ export async function POST(req: Request) {
         success++;
       } catch (err) {
         console.error(err);
+        const msg =
+          err instanceof Error ? err.message.slice(0, 120) : "unknown error";
         errors++;
-        errorLines.push(`Row ${i + 1}: failed to save (${leadCode || orgName})`);
+        errorLines.push(`Row ${rowLabel}: failed to save (${leadCode || orgName}) — ${msg}`);
       }
     }
 
@@ -429,17 +484,21 @@ export async function POST(req: Request) {
       }
     }
 
-    await prisma.importLog.create({
-      data: {
-        source: "Excel Outreach",
-        fileName,
-        importedById: user.id,
-        successCount: success,
-        skippedCount: skipped,
-        errorCount: errors,
-        errorSummary: errorLines.slice(0, 40).join("\n") || null,
-      },
-    });
+    try {
+      await prisma.importLog.create({
+        data: {
+          source: "Excel Outreach",
+          fileName,
+          importedById: user.id,
+          successCount: success,
+          skippedCount: skipped,
+          errorCount: errors,
+          errorSummary: errorLines.slice(0, 40).join("\n") || null,
+        },
+      });
+    } catch (logErr) {
+      console.error("importLog create failed", logErr);
+    }
 
     return NextResponse.json({
       success,
@@ -456,6 +515,10 @@ export async function POST(req: Request) {
     });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "Import failed" }, { status: 500 });
+    const detail = e instanceof Error ? e.message : "Import failed";
+    return NextResponse.json(
+      { error: detail.slice(0, 300) || "Import failed" },
+      { status: 500 },
+    );
   }
 }
